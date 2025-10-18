@@ -326,11 +326,6 @@ const app = createApp({
                 },
                 yAxis: {
                     type: 'value',
-                    name: 'ms',
-                    nameTextStyle: {
-                        color: '#6b7280',
-                        fontSize: 12
-                    },
                     min: 0,
                     max: Math.round(maxTime),
                     axisLabel: {
