@@ -307,7 +307,7 @@ const app = createApp({
             // 转换为 ECharts markArea 格式
             const markAreaData = markAreas.map(area => {
                 const color = area.status === 2 
-                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色半透明 - 维护中
+                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色半透明 - 重试中
                     : 'rgba(239, 68, 68, 0.3)';   // 红色半透明 - 离线
                 
                 return [
@@ -411,10 +411,10 @@ const app = createApp({
             const time = new Date(item.createdAt).toLocaleString('zh-CN');
             if (item.status === 1) {
                 return `${time} - 在线 (${item.responseTime}ms)`;
-            } else if (item.status === 2) {
-                return `${time} - 维护中`;
+            } else if (data.value === 2) {
+                return `${time} - 重试中`;
             } else {
-                return `${time} - 离线/丢包`;
+                return `${time} - 离线`;
             }
         },
         formatUptime(uptime) {

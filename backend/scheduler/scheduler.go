@@ -52,6 +52,17 @@ func fetchAndStore() {
 	// 解析监控项（结合心跳数据）
 	monitors := fetcher.ParseMonitors(statusPage, heartbeatData)
 
+	// 收集当前的监控项ID列表
+	currentMonitorIDs := make([]int, 0, len(monitors))
+	for _, monitor := range monitors {
+		currentMonitorIDs = append(currentMonitorIDs, monitor.ID)
+	}
+
+	// 同步删除不存在的监控项
+	if err := database.SyncMonitors(currentMonitorIDs); err != nil {
+		log.Printf("同步删除监控项失败: %v", err)
+	}
+
 	// 保存监控项和心跳记录
 	for _, monitor := range monitors {
 		if err := database.SaveMonitor(&monitor); err != nil {

@@ -247,7 +247,7 @@ const app = createApp({
         },
         getStatusText(status) {
             if (status === 1) return '✓ 正常运行';
-            if (status === 2) return '⚠ 维护中';
+            if (status === 2) return '⚠ 重试中';
             return '✗ 异常';
         }
     }
