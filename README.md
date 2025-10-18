@@ -98,11 +98,39 @@ kuma-lite/
 
 ## 快速开始
 
-### 使用 Docker 部署（推荐）
+### 🐳 使用 Docker Hub 镜像（最简单）
+
+```bash
+# 1. 创建配置文件
+cat > .env << EOF
+KUMA_API_URL=https://your-kuma-instance.com
+KUMA_STATUS_PAGE_SLUG=your-status-page-slug
+SERVER_PORT=8080
+EOF
+
+# 2. 运行容器
+docker run -d \
+  --name kuma-lite \
+  -p 8080:8080 \
+  --env-file .env \
+  -v $(pwd)/data:/data \
+  ziwiwiz/kuma-lite:latest
+
+# 3. 查看日志
+docker logs -f kuma-lite
+```
+
+访问 `http://localhost:8080` 即可查看监控仪表盘。
+
+**Docker 镜像标签**:
+- `ziwiwiz/kuma-lite:latest` - 最新版本
+- `ziwiwiz/kuma-lite:1.0.0` - 稳定版本
+
+### 使用 Docker Compose 部署
 
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/kuma-lite.git
+git clone https://github.com/ziwiwiz/kuma-lite.git
 cd kuma-lite
 
 # 配置环境变量
@@ -113,7 +141,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-访问 `http://localhost:3000` 即可查看监控仪表盘。
+访问 `http://localhost:8080` 即可查看监控仪表盘。
 
 ### 本地开发
 
