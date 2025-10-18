@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  kuma-lite-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kuma-lite-dev
+    ports:
+      - "8080:8080"      # 应用端口
+      - "2345:2345"      # Delve 调试端口（可选）
+    volumes:
+      # 挂载源代码以支持热重载
+      - ./backend:/app/backend
+      - ./static:/app/static
+      - ./go.mod:/app/go.mod
+      - ./go.sum:/app/go.sum
+      - ./.air.toml:/app/.air.toml
+      # 挂载数据目录
+      - ./data:/data
+      # Go 模块缓存（提升重启速度）
+      - go-modules:/go/pkg/mod
+    environment:
+      - KUMA_API_URL=${KUMA_API_URL:-https://demo.kuma.pet}
+      - KUMA_STATUS_PAGE_SLUG=${KUMA_STATUS_PAGE_SLUG:-demo}
+      - SERVER_PORT=8080
+      - CACHE_DURATION=${CACHE_DURATION:-60}
+      - FETCH_INTERVAL=${FETCH_INTERVAL:-30}
+      - DB_PATH=/data/kuma-lite.db
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-30}
+      # 开发环境特定配置
+      - GIN_MODE=debug
+      - LOG_LEVEL=debug
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    networks:
+      - kuma-lite-network
+
+  # 可选：添加 Adminer 用于数据库调试
+  adminer:
+    image: adminer:latest
+    container_name: kuma-lite-adminer
+    ports:
+      - "8081:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=kuma-lite-dev
+    networks:
+      - kuma-lite-network
+    profiles:
+      - debug
+
+volumes:
+  go-modules:
+
+networks:
+  kuma-lite-network:
+    driver: bridge

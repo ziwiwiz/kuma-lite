@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  kuma-lite:
+    build: .
+    container_name: kuma-lite
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - KUMA_API_URL=${KUMA_API_URL}
+      - KUMA_STATUS_PAGE_SLUG=${KUMA_STATUS_PAGE_SLUG}
+      - SERVER_PORT=8080
+      - CACHE_DURATION=${CACHE_DURATION:-60}
+      - FETCH_INTERVAL=${FETCH_INTERVAL:-30}
+      - DB_PATH=/data/kuma-lite.db
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-30}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

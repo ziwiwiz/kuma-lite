@@ -1,0 +1,34 @@
+# 二进制文件
+kuma-lite
+*.exe
+
+# 数据库文件
+*.db
+*.db-shm
+*.db-wal
+
+# 数据目录
+data/
+
+# 日志文件
+*.log
+
+# 环境变量
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# 临时文件
+tmp/
+temp/

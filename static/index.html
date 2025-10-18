@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuma Lite - 服务监控</title>
+    <link rel="stylesheet" href="/css/style-v2.css?v=20251018-3">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- 加载状态 -->
+        <div class="loading-overlay" v-if="loading && !stats">
+            <div class="loading-spinner"></div>
+            <p>加载监控数据中...</p>
+        </div>
+
+        <!-- 主内容 -->
+        <div v-else>
+            <!-- 顶部状态横幅 -->
+            <div class="top-banner" :class="getBannerClass()">
+                <div class="banner-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                </div>
+                <div class="banner-text">
+                    <span v-if="stats && stats.downMonitors === 0">所有服务一切正常</span>
+                    <span v-else-if="stats">部分服务异常</span>
+                    <span v-if="stats"> ({{ stats.upMonitors }}/{{ stats.totalMonitors }})</span>
+                </div>
+                <button class="banner-toggle" @click="toggleAllGroups">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 控制栏 -->
+            <div class="control-bar">
+                <button class="btn-pause" @click="togglePause">
+                    <span v-if="!paused">暂停</span>
+                    <span v-else>继续</span>
+                </button>
+                <button class="btn-refresh" @click="fetchData" :disabled="loading">立即刷新</button>
+                <span class="refresh-info">
+                    上次刷新: {{ lastUpdate }} 将在 {{ countdown }} 秒后刷新
+                </span>
+            </div>
+
+            <!-- 监控分组 -->
+            <div class="monitor-groups">
+                <div v-for="group in groupedMonitors" :key="group.name" class="monitor-group">
+                    <h2 class="group-title">{{ group.name }}</h2>
+                    
+                    <div class="monitor-cards">
+                        <div v-for="monitor in group.monitors" :key="monitor.id" class="monitor-card">
+                            <!-- 卡片主要内容 - 点击跳转到详情页 -->
+                            <div class="card-main" @click="goToDetail(monitor.id)">
+                                <!-- 卡片头部 -->
+                                <div class="card-header">
+                                    <div class="monitor-title">
+                                        <span class="status-icon" :class="getStatusIconClass(monitor.status)">
+                                            <svg v-if="monitor.status === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                                <path d="M20 6L9 17l-5-5"/>
+                                            </svg>
+                                            <svg v-else-if="monitor.status === 2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                            </svg>
+                                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                                <line x1="6" y1="6" x2="18" y2="18"/>
+                                            </svg>
+                                        </span>
+                                        <span class="monitor-name">{{ monitor.name }}</span>
+                                    </div>
+                                    <div class="uptime-display">
+                                        <div class="uptime-circle" :style="getUptimeCircleStyle(monitor.uptime)">
+                                            <svg viewBox="0 0 36 36">
+                                                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                                <path class="circle-progress" :stroke-dasharray="getCircleDasharray(monitor.uptime)" :stroke="getUptimeColor(monitor.uptime)" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                            </svg>
+                                        </div>
+                                        <span class="uptime-percent">{{ formatUptime(monitor.uptime) }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- 响应时间信息 -->
+                                <div class="response-info">
+                                    <span class="response-label">LT:</span>
+                                    <span class="response-value">{{ monitor.responseTime }} ms</span>
+                                    <span class="response-label" style="margin-left: 15px;">AL:</span>
+                                    <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span>
+                                    <span class="response-label" style="margin-left: 15px;">MAX:</span>
+                                    <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span>
+                                </div>
+
+                                <!-- 状态条 -->
+                                <div class="status-bar">
+                                    <div v-for="(item, index) in getDisplayHistory(monitor)" 
+                                         :key="index" 
+                                         class="status-bar-item" 
+                                         :class="getStatusBarClass(item)"
+                                         @mouseenter="showTooltip($event, item)"
+                                         @mouseleave="hideTooltip">
+                                    </div>
+                                </div>
+
+                                <!-- Tooltip -->
+                                <div v-if="tooltip.show" 
+                                     class="custom-tooltip" 
+                                     :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }">
+                                    {{ tooltip.text }}
+                                </div>
+
+                                <!-- 图表切换按钮 -->
+                                <div class="chart-tabs">
+                                    <button 
+                                        v-for="period in [100, 50, 25]" 
+                                        :key="period"
+                                        :class="{ active: monitor.selectedPeriod === period }"
+                                        @click.stop="changeChartPeriod(monitor.id, period)">
+                                        最近 {{ period }} 次
+                                    </button>
+                                </div>
+
+                                <!-- 小图表 -->
+                                <div class="chart-container" :id="'chart-' + monitor.id"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页脚 -->
+            <div class="footer">
+                <p>Powered by <strong>Uptime Kuma</strong> & <strong>Kuma Lite</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app-v2.js?v=20251018-3"></script>
+</body>
+</html>

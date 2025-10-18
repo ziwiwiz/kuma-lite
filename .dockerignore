@@ -1,0 +1,59 @@
+# Git 相关
+.git
+.gitignore
+.gitattributes
+.history
+
+# 构建产物
+tmp/
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+kuma-lite
+
+# 测试和覆盖率
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# 数据文件
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# 日志
+*.log
+logs/
+
+# 编辑器和 IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 依赖
+vendor/
+
+# 文档
+README.md
+docs/
+*.md
+
+# Docker 相关（开发时）
+docker-compose.override.yml
+
+# 其他
+.air.toml
+build-errors.log
