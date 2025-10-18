@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>监控详情 - Kuma Lite</title>
-    <link rel="stylesheet" href="/css/style-detail.css?v=20251018-14">
+    <link rel="stylesheet" href="/css/style-detail.css?v=20251019-36">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -19,135 +19,89 @@
 
         <!-- 主内容 -->
         <div v-else-if="monitor">
-            <!-- 返回按钮 -->
-            <div class="back-bar">
-                <button class="btn-back" @click="goBack">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M19 12H5M12 19l-7-7 7-7"/>
-                    </svg>
-                    返回列表
-                </button>
-            </div>
-
             <!-- 监控信息卡片 -->
             <div class="monitor-info-card">
                 <div class="info-header">
                     <div class="monitor-title-section">
-                        <span class="status-icon" :class="getStatusIconClass(monitor.status)">
-                            <svg v-if="monitor.status === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                                <path d="M20 6L9 17l-5-5"/>
+                        <button class="btn-back-status" :class="getStatusIconClass(monitor.status)" @click="goBack">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
                             </svg>
-                            <svg v-else-if="monitor.status === 2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <line x1="12" y1="8" x2="12" y2="12"/>
-                                <line x1="12" y1="16" x2="12.01" y2="16"/>
-                            </svg>
-                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        </span>
+                        </button>
                         <h1>{{ monitor.name }}</h1>
                     </div>
-                    <div class="uptime-display-large">
-                        <div class="uptime-circle-large">
-                            <svg viewBox="0 0 36 36">
-                                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                                <path class="circle-progress" :stroke="getUptimeColor(monitor.uptime)" :stroke-dasharray="getCircleDasharray(monitor.uptime)" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <!-- 周期选择 -->
+                    <div class="period-dropdown">
+                        <button class="period-dropdown-btn" @click="togglePeriodDropdown">
+                            {{ selectedPeriodLabel }}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 9l-7 7-7-7"/>
                             </svg>
+                        </button>
+                        <div class="period-dropdown-menu" v-if="showPeriodDropdown">
+                            <div v-for="option in periodOptions" 
+                                 :key="option.value"
+                                 class="period-dropdown-item"
+                                 :class="{ active: selectedPeriod === option.value }"
+                                 @click="changePeriod(option.value)">
+                                {{ option.label }}
+                            </div>
                         </div>
-                        <span class="uptime-percent-large">{{ formatUptime(monitor.uptime) }}</span>
                     </div>
                 </div>
 
                 <div class="info-stats">
                     <div class="stat-box">
-                        <span class="stat-label">类型</span>
-                        <span class="stat-value">{{ monitor.type }}</span>
+                        <span class="stat-label">当前</span>
+                        <span class="stat-value">{{ monitor.responseTime }}ms</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">分组</span>
-                        <span class="stat-value">{{ monitor.group }}</span>
+                        <span class="stat-label">平均</span>
+                        <span class="stat-value">{{ avgResponseTime }}ms</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">当前响应</span>
-                        <span class="stat-value">{{ monitor.responseTime }} ms</span>
+                        <span class="stat-label">最大</span>
+                        <span class="stat-value">{{ maxResponseTime }}ms</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">平均响应</span>
-                        <span class="stat-value">{{ avgResponseTime }} ms</span>
+                        <span class="stat-label">在线率</span>
+                        <span class="stat-value">{{ onlineRate }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">最大延迟</span>
-                        <span class="stat-value">{{ maxResponseTime }} ms</span>
+                        <span class="stat-label">总检测</span>
+                        <span class="stat-value">{{ totalChecks }}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">在线</span>
+                        <span class="stat-value">{{ onlineChecks }}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">离线</span>
+                        <span class="stat-value">{{ offlineChecks }}</span>
                     </div>
                 </div>
             </div>
 
-            <!-- 周期选择 -->
-            <div class="period-selector">
-                <button 
-                    v-for="period in [100, 50, 25]" 
-                    :key="period"
-                    :class="{ active: selectedPeriod === period }"
-                    @click="changePeriod(period)">
-                    最近 {{ period }} 次
-                </button>
-            </div>
-
-            <!-- 状态条 -->
-            <div class="status-bar-container">
-                <h3>状态历史</h3>
-                <div class="status-bar-large">
-                    <div v-for="(item, index) in displayHistory" 
-                         :key="index" 
-                         class="status-bar-item-large" 
-                         :class="getStatusBarClass(item)"
-                         @mouseenter="showTooltip($event, item)"
-                         @mouseleave="hideTooltip">
-                    </div>
-                </div>
-
-                <div class="status-legend">
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #10b981;"></span>
-                        <span>在线</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #ef4444;"></span>
-                        <span>离线/丢包</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background: #f59e0b;"></span>
-                        <span>维护中</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 详细图表 -->
+            <!-- 响应时间趋势图 -->
             <div class="chart-section">
-                <h3>响应时间趋势</h3>
+                <div class="chart-legend-bar">
+                    <span class="chart-y-label">响应时间 (ms)</span>
+                    <div class="status-legend">
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #10b981;"></span>
+                            <span>在线</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #f59e0b;"></span>
+                            <span>维护中</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #ef4444;"></span>
+                            <span>离线/丢包</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="chart-container-large" id="main-chart"></div>
-            </div>
-
-            <!-- 统计信息 -->
-            <div class="statistics-grid">
-                <div class="stat-card">
-                    <h4>在线率</h4>
-                    <p class="stat-number">{{ onlineRate }}</p>
-                </div>
-                <div class="stat-card">
-                    <h4>总检测次数</h4>
-                    <p class="stat-number">{{ totalChecks }}</p>
-                </div>
-                <div class="stat-card">
-                    <h4>在线次数</h4>
-                    <p class="stat-number">{{ onlineChecks }}</p>
-                </div>
-                <div class="stat-card">
-                    <h4>离线次数</h4>
-                    <p class="stat-number">{{ offlineChecks }}</p>
-                </div>
             </div>
         </div>
 
@@ -166,6 +120,6 @@
         </div>
     </div>
 
-    <script src="/js/app-detail.js?v=20251019-25"></script>
+    <script src="/js/app-detail.js?v=20251019-35"></script>
 </body>
 </html>

@@ -43,43 +43,12 @@ body {
     to { transform: rotate(360deg); }
 }
 
-/* 返回栏 */
-.back-bar {
-    margin-bottom: 20px;
-}
-
-.btn-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 20px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    color: #6b7280;
-}
-
-.btn-back:hover {
-    background: #f9fafb;
-    border-color: #10b981;
-    color: #10b981;
-}
-
-.btn-back svg {
-    width: 20px;
-    height: 20px;
-}
-
 /* 监控信息卡片 */
 .monitor-info-card {
     background: white;
     border-radius: 12px;
-    padding: 30px;
-    margin-bottom: 20px;
+    padding: 15px 20px;
+    margin-bottom: 15px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
@@ -87,199 +56,150 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid #f3f4f6;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .monitor-title-section {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px;
 }
 
 .monitor-title-section h1 {
-    font-size: 28px;
-    font-weight: 700;
+    font-size: 22px;
+    font-weight: 600;
     color: #1f2937;
     margin: 0;
 }
 
-.status-icon {
-    width: 40px;
-    height: 40px;
+.btn-back-status {
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: white;
 }
 
-.status-icon.up {
+.btn-back-status:hover {
+    opacity: 0.85;
+    transform: scale(1.05);
+}
+
+.btn-back-status.up {
     background: #10b981;
-    color: white;
 }
 
-.status-icon.down {
+.btn-back-status.down {
     background: #ef4444;
-    color: white;
 }
 
-.status-icon.maintenance {
+.btn-back-status.maintenance {
     background: #f59e0b;
-    color: white;
 }
 
-.status-icon svg {
-    width: 24px;
-    height: 24px;
-}
-
-.uptime-display-large {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.uptime-circle-large {
-    width: 80px;
-    height: 80px;
-}
-
-.uptime-circle-large svg {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-}
-
-.circle-bg {
-    fill: none;
-    stroke: #e5e7eb;
-    stroke-width: 3;
-}
-
-.circle-progress {
-    fill: none;
-    stroke-width: 3;
-    stroke-linecap: round;
-    transition: stroke-dasharray 0.3s ease;
-}
-
-.uptime-percent-large {
-    font-size: 32px;
-    font-weight: 700;
-    color: #1f2937;
+.btn-back-status svg {
+    width: 16px;
+    height: 16px;
 }
 
 .info-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
 }
 
 .stat-box {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 15px;
+    gap: 4px;
+    padding: 8px 10px;
     background: #f9fafb;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 .stat-label {
-    font-size: 13px;
+    font-size: 11px;
     color: #6b7280;
     font-weight: 500;
 }
 
 .stat-value {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 700;
     color: #1f2937;
 }
 
 /* 周期选择器 */
-.period-selector {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+.period-dropdown {
+    position: relative;
+    width: 110px;
+    flex-shrink: 0;
 }
 
-.period-selector button {
-    flex: 1;
-    padding: 12px 20px;
-    border: 2px solid #e5e7eb;
+.period-dropdown-btn {
+    width: 100%;
+    padding: 6px 12px;
+    border: 1px solid #e5e7eb;
     background: white;
-    border-radius: 8px;
-    font-size: 14px;
+    border-radius: 6px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
-    color: #6b7280;
-}
-
-.period-selector button:hover {
-    border-color: #10b981;
-    color: #10b981;
-}
-
-.period-selector button.active {
-    background: #10b981;
-    color: white;
-    border-color: #10b981;
-}
-
-/* 状态条容器 */
-.status-bar-container {
-    background: white;
-    border-radius: 12px;
-    padding: 25px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.status-bar-container h3 {
-    font-size: 18px;
-    font-weight: 600;
     color: #1f2937;
-    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.status-bar-large {
-    display: flex;
-    gap: 3px;
-    height: 40px;
-    margin-bottom: 15px;
-    margin-left: 60px;
-    margin-right: 40px;
+.period-dropdown-btn:hover {
+    border-color: #10b981;
+}
+
+.period-dropdown-btn svg {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s;
+}
+
+.period-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
     overflow: hidden;
 }
 
-.status-bar-item-large {
-    flex: 1;
-    transition: all 0.2s;
+.period-dropdown-item {
+    padding: 8px 12px;
     cursor: pointer;
-    position: relative;
+    transition: all 0.2s;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 500;
 }
 
-.status-bar-item-large:hover {
-    opacity: 0.9;
-    transform: scaleY(1.1) scaleX(1.05);
-    z-index: 10;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+.period-dropdown-item:hover {
+    background: #f9fafb;
+    color: #10b981;
 }
 
-.status-bar-item-large.up {
+.period-dropdown-item.active {
     background: #10b981;
-}
-
-.status-bar-item-large.down {
-    background: #ef4444;
-}
-
-.status-bar-item-large.maintenance {
-    background: #f59e0b; /* 橙色 */
+    color: white;
 }
 
 /* Vue 自定义 Tooltip */
@@ -298,42 +218,48 @@ body {
     margin-top: -8px;
 }
 
+/* 图表区域 */
+.chart-section {
+    background: white;
+    border-radius: 12px;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.chart-legend-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.chart-y-label {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
 .status-legend {
     display: flex;
-    gap: 20px;
-    justify-content: center;
+    gap: 15px;
     flex-wrap: wrap;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
+    gap: 6px;
+    font-size: 12px;
     color: #6b7280;
 }
 
 .legend-color {
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
 }
 
-/* 图表区域 */
-.chart-section {
-    background: white;
-    border-radius: 12px;
-    padding: 25px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.chart-section h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 20px;
-}
 
 .chart-container-large {
     width: 100%;
@@ -397,36 +323,40 @@ body {
     }
 
     .monitor-info-card {
-        padding: 20px;
+        padding: 12px 15px;
     }
 
     .info-header {
         flex-direction: column;
-        gap: 20px;
+        gap: 12px;
+        align-items: stretch;
     }
 
     .monitor-title-section h1 {
-        font-size: 22px;
-    }
-
-    .uptime-circle-large {
-        width: 60px;
-        height: 60px;
-    }
-
-    .uptime-percent-large {
-        font-size: 24px;
+        font-size: 16px;
     }
 
     .info-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
     }
 
     .chart-container-large {
         height: 300px;
     }
 
-    .statistics-grid {
-        grid-template-columns: 1fr;
+    .period-dropdown {
+        width: 100%;
+    }
+    
+    .chart-legend-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .status-legend {
+        width: 100%;
+        justify-content: space-between;
     }
 }

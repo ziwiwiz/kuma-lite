@@ -8,7 +8,15 @@ const app = createApp({
             historyData: [],
             loading: true,
             error: null,
-            selectedPeriod: 100,
+            selectedPeriod: 'recent',  // 默认"最近"
+            showPeriodDropdown: false,
+            periodOptions: [
+                { value: 'recent', label: '最近', hours: null },
+                { value: '3h', label: '3h', hours: 3 },
+                { value: '6h', label: '6h', hours: 6 },
+                { value: '24h', label: '24h', hours: 24 },
+                { value: '1w', label: '1w', hours: 168 }
+            ],
             chart: null,
             tooltip: {
                 show: false,
@@ -20,7 +28,25 @@ const app = createApp({
     },
     computed: {
         displayHistory() {
-            return this.historyData.slice(-this.selectedPeriod);
+            if (!this.historyData || this.historyData.length === 0) return [];
+            
+            // 如果选择的是"最近",返回最后100条
+            if (this.selectedPeriod === 'recent') {
+                return this.historyData.slice(-100);
+            }
+            
+            // 否则根据小时数过滤
+            const selectedOption = this.periodOptions.find(opt => opt.value === this.selectedPeriod);
+            if (!selectedOption || !selectedOption.hours) {
+                return this.historyData.slice(-100);
+            }
+            
+            const hoursAgo = new Date(Date.now() - selectedOption.hours * 60 * 60 * 1000);
+            return this.historyData.filter(item => new Date(item.createdAt) >= hoursAgo);
+        },
+        selectedPeriodLabel() {
+            const option = this.periodOptions.find(opt => opt.value === this.selectedPeriod);
+            return option ? option.label : '最近';
         },
         avgResponseTime() {
             if (!this.displayHistory || this.displayHistory.length === 0) return 0;
@@ -61,6 +87,13 @@ const app = createApp({
         }
 
         this.fetchData();
+        
+        // 点击外部关闭下拉菜单
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.period-dropdown')) {
+                this.showPeriodDropdown = false;
+            }
+        });
     },
     beforeUnmount() {
         if (this.chart) {
@@ -96,11 +129,15 @@ const app = createApp({
                 this.loading = false;
             }
         },
-        changePeriod(period) {
-            this.selectedPeriod = period;
+        changePeriod(periodValue) {
+            this.selectedPeriod = periodValue;
+            this.showPeriodDropdown = false;
             this.$nextTick(() => {
                 this.renderChart();
             });
+        },
+        togglePeriodDropdown() {
+            this.showPeriodDropdown = !this.showPeriodDropdown;
         },
         renderChart() {
             const chartEl = document.getElementById('main-chart');
@@ -206,24 +243,24 @@ const app = createApp({
                 
                 return [
                     { 
-                        xAxis: area.start,
+                        xAxis: times[area.start],
                         itemStyle: { 
                             color: color,
                             borderWidth: 0
                         }
                     },
                     { 
-                        xAxis: area.end
+                        xAxis: times[area.end]
                     }
                 ];
             });
 
             const option = {
                 grid: {
-                    left: '60px',
-                    right: '40px',
-                    bottom: '80px',
-                    top: '60px'
+                    left: '50px',
+                    right: '30px',
+                    bottom: '45px',
+                    top: '20px'
                 },
                 xAxis: {
                     type: 'category',
@@ -231,7 +268,7 @@ const app = createApp({
                     axisLabel: {
                         fontSize: 12,
                         color: '#6b7280',
-                        rotate: 45,
+                        rotate: 0,
                         interval: Math.floor(times.length / 8)
                     },
                     axisLine: {
@@ -240,11 +277,6 @@ const app = createApp({
                 },
                 yAxis: {
                     type: 'value',
-                    name: '响应时间 (ms)',
-                    nameTextStyle: {
-                        color: '#6b7280',
-                        fontSize: 14
-                    },
                     min: 0,
                     max: Math.round(maxTime),
                     axisLabel: {

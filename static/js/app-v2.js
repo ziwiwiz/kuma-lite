@@ -293,14 +293,14 @@ const app = createApp({
                 
                 return [
                     { 
-                        xAxis: area.start,
+                        xAxis: times[area.start],
                         itemStyle: { 
                             color: color,
                             borderWidth: 0
                         }
                     },
                     { 
-                        xAxis: area.end
+                        xAxis: times[area.end]
                     }
                 ];
             });
