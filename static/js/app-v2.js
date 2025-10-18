@@ -99,6 +99,8 @@ const app = createApp({
 
         // 获取所有监控项的历史数据
         async fetchAllHistory() {
+            console.log('开始获取历史数据，监控数量:', this.monitors.length);
+            
             const promises = this.monitors.map(async (monitor) => {
                 try {
                     const res = await axios.get(`/api/monitors/${monitor.id}/history?hours=24`);
@@ -121,12 +123,16 @@ const app = createApp({
 
             await Promise.all(promises);
             
+            console.log('历史数据获取完成，准备渲染图表...');
+            
             // 使用 Vue 的 nextTick 确保 DOM 更新后再渲染图表
             this.$nextTick(() => {
-                // 使用 setTimeout 确保图表容器已经渲染
+                console.log('nextTick 回调执行');
+                // 增加延迟时间，确保图表容器已经完全渲染
                 setTimeout(() => {
+                    console.log('准备调用 renderAllCharts...');
                     this.renderAllCharts();
-                }, 100);
+                }, 300);
             });
         },
 
@@ -158,15 +164,53 @@ const app = createApp({
 
         // 渲染所有图表
         renderAllCharts() {
+            let successCount = 0;
+            let failCount = 0;
+            
             this.monitors.forEach(monitor => {
-                this.renderChart(monitor);
+                const chartEl = document.getElementById('chart-' + monitor.id);
+                if (chartEl) {
+                    this.renderChart(monitor);
+                    successCount++;
+                } else {
+                    failCount++;
+                    console.warn(`Chart container not found for monitor ${monitor.id}, will retry`);
+                }
             });
+            
+            console.log(`图表渲染: 成功 ${successCount}, 失败 ${failCount}`);
+            
+            // 如果有失败的，500ms 后重试一次
+            if (failCount > 0) {
+                setTimeout(() => {
+                    console.log('重试渲染失败的图表...');
+                    this.monitors.forEach(monitor => {
+                        const chartEl = document.getElementById('chart-' + monitor.id);
+                        if (chartEl && !this.charts[monitor.id]) {
+                            this.renderChart(monitor);
+                        }
+                    });
+                }, 500);
+            }
         },
 
         // 渲染单个图表
         renderChart(monitor) {
             const chartEl = document.getElementById('chart-' + monitor.id);
-            if (!chartEl || !monitor.statusHistory || monitor.statusHistory.length === 0) return;
+            if (!chartEl) {
+                console.warn(`图表容器不存在: chart-${monitor.id}`);
+                return;
+            }
+            if (!monitor.statusHistory) {
+                console.warn(`监控 ${monitor.id} 没有历史数据`);
+                return;
+            }
+            if (monitor.statusHistory.length === 0) {
+                console.warn(`监控 ${monitor.id} 历史数据为空`);
+                return;
+            }
+            
+            console.log(`正在渲染图表: ${monitor.name} (ID: ${monitor.id}), 数据点: ${monitor.statusHistory.length}`);
 
             // 销毁旧图表
             if (this.charts[monitor.id]) {
