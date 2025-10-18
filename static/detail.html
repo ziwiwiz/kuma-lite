@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>监控详情 - Kuma Lite</title>
-    <link rel="stylesheet" href="/css/style-detail.css?v=20251019-36">
+    <link rel="stylesheet" href="/css/style-detail.css?v=20251019-clean">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -52,32 +52,28 @@
 
                 <div class="info-stats">
                     <div class="stat-box">
-                        <span class="stat-label">当前</span>
-                        <span class="stat-value">{{ monitor.responseTime }}ms</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">平均</span>
-                        <span class="stat-value">{{ avgResponseTime }}ms</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">最大</span>
-                        <span class="stat-value">{{ maxResponseTime }}ms</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">在线率</span>
-                        <span class="stat-value">{{ onlineRate }}</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">总检测</span>
+                        <span class="stat-label">总检测:</span>
                         <span class="stat-value">{{ totalChecks }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">在线</span>
+                        <span class="stat-label">在线:</span>
                         <span class="stat-value">{{ onlineChecks }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">离线</span>
-                        <span class="stat-value">{{ offlineChecks }}</span>
+                        <span class="stat-label">在线率:</span>
+                        <span class="stat-value">{{ onlineRate }}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">当前:</span>
+                        <span class="stat-value">{{ currentResponseTime }}ms</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">平均:</span>
+                        <span class="stat-value">{{ avgResponseTime }}ms</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">最大:</span>
+                        <span class="stat-value">{{ maxResponseTime }}ms</span>
                     </div>
                 </div>
             </div>
@@ -120,6 +116,6 @@
         </div>
     </div>
 
-    <script src="/js/app-detail.js?v=20251019-35"></script>
+    <script src="/js/app-detail.js?v=20251019-clean"></script>
 </body>
 </html>

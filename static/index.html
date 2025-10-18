@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kuma Lite - 服务监控</title>
-    <link rel="stylesheet" href="/css/style-v2.css?v=20251018-10">
+    <link rel="stylesheet" href="/css/style-v2.css?v=20251019-width">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -94,12 +94,9 @@
 
                                 <!-- 响应时间信息 -->
                                 <div class="response-info">
-                                    <span class="response-label">LT:</span>
-                                    <span class="response-value">{{ monitor.responseTime }} ms</span>
-                                    <span class="response-label" style="margin-left: 15px;">AL:</span>
-                                    <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span>
-                                    <span class="response-label" style="margin-left: 15px;">MAX:</span>
-                                    <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span>
+                                    <span><span class="response-label">LT:</span> <span class="response-value">{{ monitor.responseTime }} ms</span></span>
+                                    <span><span class="response-label">AL:</span> <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span></span>
+                                    <span><span class="response-label">MAX:</span> <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span></span>
                                 </div>
 
                                 <!-- 状态条 -->
@@ -146,6 +143,6 @@
         </div>
     </div>
 
-    <script src="/js/app-v2.js?v=20251019-26"></script>
+    <script src="/js/app-v2.js?v=20251019-compact"></script>
 </body>
 </html>

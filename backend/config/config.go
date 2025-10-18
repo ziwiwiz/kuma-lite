@@ -10,18 +10,18 @@ import (
 // Config 应用配置
 type Config struct {
 	// Uptime Kuma 配置
-	KumaAPIURL        string
-	KumaStatusSlug    string
+	KumaAPIURL     string
+	KumaStatusSlug string
 
 	// 服务器配置
-	ServerPort        string
+	ServerPort string
 
 	// 缓存配置
-	CacheDuration     time.Duration
-	FetchInterval     time.Duration
+	CacheDuration time.Duration
+	FetchInterval time.Duration
 
 	// 数据库配置
-	DBPath            string
+	DBPath string
 
 	// 数据保留策略
 	DataRetentionDays int
@@ -36,7 +36,7 @@ func LoadConfig() *Config {
 		KumaStatusSlug:    getEnv("KUMA_STATUS_PAGE_SLUG", ""),
 		ServerPort:        getEnv("SERVER_PORT", "8080"),
 		CacheDuration:     time.Duration(getEnvInt("CACHE_DURATION", 60)) * time.Second,
-		FetchInterval:     time.Duration(getEnvInt("FETCH_INTERVAL", 30)) * time.Second,
+		FetchInterval:     time.Duration(getEnvInt("FETCH_INTERVAL", 60)) * time.Second,
 		DBPath:            getEnv("DB_PATH", "./data/kuma-lite.db"),
 		DataRetentionDays: getEnvInt("DATA_RETENTION_DAYS", 30),
 	}
