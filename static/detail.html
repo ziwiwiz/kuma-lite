@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>监控详情 - Kuma Lite</title>
-    <link rel="stylesheet" href="/css/style-detail.css">
+    <link rel="stylesheet" href="/css/style-detail.css?v=20251018-14">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -108,12 +108,6 @@
                     </div>
                 </div>
 
-                <!-- Tooltip -->
-                <div v-if="tooltip.show" 
-                     class="custom-tooltip" 
-                     :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }">
-                    {{ tooltip.text }}
-                </div>
                 <div class="status-legend">
                     <div class="legend-item">
                         <span class="legend-color" style="background: #10b981;"></span>
@@ -124,7 +118,7 @@
                         <span>离线/丢包</span>
                     </div>
                     <div class="legend-item">
-                        <span class="legend-color" style="background: #3b82f6;"></span>
+                        <span class="legend-color" style="background: #f59e0b;"></span>
                         <span>维护中</span>
                     </div>
                 </div>
@@ -163,8 +157,15 @@
             <p class="error-message">{{ error }}</p>
             <button class="btn-back" @click="goBack">返回列表</button>
         </div>
+
+        <!-- 全局 Tooltip -->
+        <div v-if="tooltip.show" 
+             class="custom-tooltip" 
+             :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }">
+            {{ tooltip.text }}
+        </div>
     </div>
 
-    <script src="/js/app-detail.js"></script>
+    <script src="/js/app-detail.js?v=20251019-25"></script>
 </body>
 </html>

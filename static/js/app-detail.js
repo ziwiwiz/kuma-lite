@@ -123,28 +123,56 @@ const app = createApp({
                 });
             });
 
-            // 分离正常数据和离线数据
-            const normalData = [];
-            const offlineMarkers = [];
+            // 只保留正常数据
+            const normalData = data.map(item => 
+                item.status === 1 ? item.responseTime : null
+            );
+
+            // 构建 markArea 数据 - 标记维护和离线时段
+            const markAreas = [];
+            let areaStart = null;
+            let areaStatus = null;
             
             data.forEach((item, index) => {
-                if (item.status === 1) {
-                    normalData.push(item.responseTime);
+                if (item.status !== 1) {
+                    // 离线或维护状态
+                    if (areaStart === null) {
+                        // 开始新的区域
+                        areaStart = index;
+                        areaStatus = item.status;
+                    } else if (areaStatus !== item.status) {
+                        // 状态变化了,结束当前区域,开始新区域
+                        markAreas.push({
+                            status: areaStatus,
+                            start: areaStart,
+                            end: index - 1
+                        });
+                        areaStart = index;
+                        areaStatus = item.status;
+                    }
                 } else {
-                    normalData.push(null);
-                    // 记录离线点的索引
-                    offlineMarkers.push({
-                        xAxis: index,
-                        yAxis: 0,
-                        value: '离线',
-                        itemStyle: {
-                            color: '#ef4444',
-                            borderColor: '#dc2626',
-                            borderWidth: 2
-                        }
-                    });
+                    // 正常状态
+                    if (areaStart !== null) {
+                        // 结束之前的区域
+                        markAreas.push({
+                            status: areaStatus,
+                            start: areaStart,
+                            end: index - 1
+                        });
+                        areaStart = null;
+                        areaStatus = null;
+                    }
                 }
             });
+            
+            // 如果最后还有未结束的区域
+            if (areaStart !== null) {
+                markAreas.push({
+                    status: areaStatus,
+                    start: areaStart,
+                    end: data.length - 1
+                });
+            }
 
             // 计算Y轴范围 - 使用平均值和标准差，避免偶发大延迟导致趋势图不清晰
             const validTimes = data.filter(d => d.status === 1).map(d => d.responseTime);
@@ -169,6 +197,26 @@ const app = createApp({
                 const margin = maxTime * 0.1 || 10;
                 maxTime = maxTime + margin;
             }
+
+            // 转换为 ECharts markArea 格式
+            const markAreaData = markAreas.map(area => {
+                const color = area.status === 2 
+                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色半透明 - 维护中
+                    : 'rgba(239, 68, 68, 0.3)';   // 红色半透明 - 离线
+                
+                return [
+                    { 
+                        xAxis: area.start,
+                        itemStyle: { 
+                            color: color,
+                            borderWidth: 0
+                        }
+                    },
+                    { 
+                        xAxis: area.end
+                    }
+                ];
+            });
 
             const option = {
                 grid: {
@@ -212,56 +260,46 @@ const app = createApp({
                 },
                 tooltip: {
                     trigger: 'axis',
+                    axisPointer: {
+                        type: 'line',
+                        label: {
+                            show: false
+                        }
+                    },
                     formatter: (params) => {
                         const dataIndex = params[0].dataIndex;
                         const item = data[dataIndex];
                         const time = times[dataIndex];
                         if (item.status === 1) {
-                            return `<strong>${time}</strong><br/>
-                                    <span style="color: #10b981;">● 在线</span><br/>
-                                    响应时间: <strong>${item.responseTime}ms</strong>`;
+                            return `${time} - 在线 (${item.responseTime}ms)`;
+                        } else if (item.status === 2) {
+                            return `${time} - 维护中`;
                         } else {
-                            return `<strong>${time}</strong><br/>
-                                    <span style="color: #ef4444;">● 离线/丢包</span>`;
+                            return `${time} - 离线`;
                         }
                     }
                 },
-                series: [
-                    {
-                        name: '响应时间',
-                        type: 'line',
-                        data: normalData,
-                        smooth: true,
-                        showSymbol: false,
-                        lineStyle: {
-                            width: 3,
-                            color: '#10b981'
-                        },
-                        areaStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: 'rgba(16, 185, 129, 0.4)' },
-                                { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
-                            ])
-                        },
-                        markPoint: {
-                            symbol: 'pin',
-                            symbolSize: 50,
-                            itemStyle: {
-                                color: '#ef4444',
-                                borderColor: '#dc2626',
-                                borderWidth: 2
-                            },
-                            label: {
-                                show: true,
-                                formatter: '离线',
-                                color: '#fff',
-                                fontSize: 11,
-                                fontWeight: 'bold'
-                            },
-                            data: offlineMarkers
-                        }
+                series: [{
+                    name: '响应时间',
+                    type: 'line',
+                    data: normalData,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: {
+                        width: 3,
+                        color: '#10b981'
+                    },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(16, 185, 129, 0.4)' },
+                            { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+                        ])
+                    },
+                    markArea: {
+                        silent: true,
+                        data: markAreaData
                     }
-                ]
+                }]
             };
 
             this.chart.setOption(option);
