@@ -23,7 +23,10 @@ fi
 # 创建数据目录
 mkdir -p data
 
-# 启动服务
+# 重新构建并启动服务
+echo -e "${GREEN}🔨 重新构建镜像...${NC}"
+docker-compose -f docker-compose.dev.yml build --no-cache
+
 echo -e "${GREEN}🚀 启动开发环境...${NC}"
 docker-compose -f docker-compose.dev.yml up -d
 

@@ -69,14 +69,13 @@ func GetRecentHeartBeats(monitorID int, limit int) ([]models.HeartBeat, error) {
 	return heartbeats, err
 }
 
-// GetHeartBeatHistory 获取监控项的历史心跳记录(按时间范围)
+// GetHeartBeatHistory 获取监控项的历史心跳记录(按时间范围,不限制条数)
 func GetHeartBeatHistory(monitorID int, hours int) ([]models.HeartBeat, error) {
 	var heartbeats []models.HeartBeat
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 
 	err := DB.Where("monitor_id = ? AND created_at >= ?", monitorID, since).
 		Order("created_at DESC").
-		Limit(100). // 限制最多返回100条记录
 		Find(&heartbeats).Error
 
 	// 反转结果，使其按时间升序排列

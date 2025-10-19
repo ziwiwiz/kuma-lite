@@ -85,21 +85,21 @@ func GetMonitorHistory(c *gin.Context) {
 	}
 
 	// 获取查询参数
-	limitStr := c.Query("limit")    // 限制条数(优先级高)
-	hoursStr := c.Query("hours")    // 时间范围
-	
+	limitStr := c.Query("limit") // 限制条数(优先级高)
+	hoursStr := c.Query("hours") // 时间范围
+
 	var heartbeats []models.HeartBeat
 	var cacheKey string
-	
+
 	// 如果提供了 limit 参数,直接获取最近 N 条记录(不限制时间)
 	if limitStr != "" {
 		limit, err := strconv.Atoi(limitStr)
 		if err != nil || limit <= 0 {
 			limit = 100
 		}
-		
+
 		cacheKey = "history_" + idStr + "_limit_" + limitStr
-		
+
 		// 尝试从缓存获取
 		if cached, found := cache.Get(cacheKey); found {
 			c.JSON(http.StatusOK, models.APIResponse{
@@ -108,7 +108,7 @@ func GetMonitorHistory(c *gin.Context) {
 			})
 			return
 		}
-		
+
 		heartbeats, err = database.GetRecentHeartBeats(id, limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -126,9 +126,9 @@ func GetMonitorHistory(c *gin.Context) {
 				hours = h
 			}
 		}
-		
+
 		cacheKey = "history_" + idStr + "_" + strconv.Itoa(hours) + "h"
-		
+
 		// 尝试从缓存获取
 		if cached, found := cache.Get(cacheKey); found {
 			c.JSON(http.StatusOK, models.APIResponse{
@@ -137,7 +137,7 @@ func GetMonitorHistory(c *gin.Context) {
 			})
 			return
 		}
-		
+
 		heartbeats, err = database.GetHeartBeatHistory(id, hours)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, models.APIResponse{

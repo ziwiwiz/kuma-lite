@@ -94,7 +94,7 @@ func fetchAndStore() {
 	for _, monitor := range monitors {
 		// 清空 limit 模式的缓存(主页使用)
 		cache.Delete("history_" + strconv.Itoa(monitor.ID) + "_limit_100")
-		
+
 		// 清空不同时间范围的历史记录缓存(详情页使用)
 		for _, hours := range []string{"1", "3", "6", "12", "24", "48", "168"} {
 			cacheKey := "history_" + strconv.Itoa(monitor.ID) + "_" + hours + "h"
