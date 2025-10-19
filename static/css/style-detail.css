@@ -363,13 +363,39 @@ body {
         align-items: stretch;
     }
 
+    .monitor-title-section {
+        width: 100%;
+    }
+
     .monitor-title-section h1 {
         font-size: 16px;
+    }
+    
+    .btn-back-status {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .btn-back-status svg {
+        width: 18px;
+        height: 18px;
     }
 
     .info-stats {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
+    }
+    
+    .stat-item {
+        padding: 10px;
+    }
+    
+    .stat-label {
+        font-size: 11px;
+    }
+    
+    .stat-value {
+        font-size: 18px;
     }
 
     .chart-container-large {
@@ -378,6 +404,11 @@ body {
 
     .period-dropdown {
         width: 100%;
+    }
+    
+    .period-dropdown-btn {
+        width: 100%;
+        justify-content: space-between;
     }
     
     .chart-legend-bar {
@@ -389,5 +420,78 @@ body {
     .status-legend {
         width: 100%;
         justify-content: space-between;
+    }
+}
+
+/* 超小屏幕适配 (< 480px) */
+@media (max-width: 480px) {
+    #app {
+        padding: 8px;
+    }
+    
+    .monitor-info-card {
+        padding: 10px 12px;
+        border-radius: 10px;
+    }
+    
+    .monitor-title-section h1 {
+        font-size: 15px;
+    }
+    
+    .btn-back-status {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .btn-back-status svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .info-stats {
+        gap: 6px;
+    }
+    
+    .stat-item {
+        padding: 8px;
+    }
+    
+    .stat-label {
+        font-size: 10px;
+    }
+    
+    .stat-value {
+        font-size: 16px;
+    }
+    
+    .period-dropdown-btn {
+        font-size: 13px;
+        padding: 8px 12px;
+        height: 36px;
+    }
+    
+    .period-dropdown-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .period-dropdown-menu {
+        font-size: 13px;
+    }
+    
+    .period-dropdown-item {
+        padding: 8px 10px;
+    }
+    
+    .chart-container-large {
+        height: 260px;
+    }
+    
+    .chart-legend-bar {
+        padding: 8px 10px;
+    }
+    
+    .status-legend-item {
+        font-size: 11px;
     }
 }

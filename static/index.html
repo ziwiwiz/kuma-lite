@@ -117,37 +117,41 @@
                         </div>
                     </div>
                 </div>
-                <div class="banner-search">
-                    <input 
-                        type="text" 
-                        v-model="searchQuery" 
-                        :placeholder="t.search"
-                        class="search-input"
-                        @input="onSearchInput">
-                    <svg v-if="!searchQuery" class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/>
-                        <path d="m21 21-4.35-4.35"/>
-                    </svg>
-                    <button v-else class="clear-search" @click="clearSearch" :title="t.clearSearch">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
+                
+                <!-- 搜索栏 + 切换按钮组 -->
+                <div class="banner-search-group">
+                    <div class="banner-search">
+                        <input 
+                            type="text" 
+                            v-model="searchQuery" 
+                            :placeholder="t.search"
+                            class="search-input"
+                            @input="onSearchInput">
+                        <svg v-if="!searchQuery" class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <button v-else class="clear-search" @click="clearSearch" :title="t.clearSearch">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <button class="banner-toggle" @click="toggleCompactMode" :title="compactMode ? t.toggleToFull : t.toggleToCompact">
+                        <svg v-if="!compactMode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="6" x2="21" y2="6"/>
+                            <line x1="3" y1="12" x2="21" y2="12"/>
+                            <line x1="3" y1="18" x2="21" y2="18"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
                         </svg>
                     </button>
                 </div>
-                <button class="banner-toggle" @click="toggleCompactMode" :title="compactMode ? t.toggleToFull : t.toggleToCompact">
-                    <svg v-if="!compactMode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="6" x2="21" y2="6"/>
-                        <line x1="3" y1="12" x2="21" y2="12"/>
-                        <line x1="3" y1="18" x2="21" y2="18"/>
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                    </svg>
-                </button>
             </div>
 
             <!-- 控制栏 -->
