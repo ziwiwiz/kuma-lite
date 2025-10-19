@@ -2,6 +2,15 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <!-- 立即应用主题，避免闪烁 - 必须放在最前面 -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('themeMode') || 'auto';
+            if (savedTheme === 'dark' || (savedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark-mode');
+            }
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kuma Lite - 服务监控</title>
     <link rel="stylesheet" href="/css/style-v2.css?v=20251019-compact">
@@ -30,6 +39,83 @@
                     <span v-if="stats && stats.downMonitors === 0">所有服务一切正常</span>
                     <span v-else-if="stats">部分服务异常</span>
                     <span v-if="stats"> ({{ stats.upMonitors }}/{{ stats.totalMonitors }})</span>
+                </div>
+                <div class="banner-controls">
+                    <!-- 主题切换下拉菜单 -->
+                    <div class="dropdown" @click="toggleThemeMenu" v-click-outside="closeThemeMenu">
+                        <button class="banner-icon-btn">
+                            <svg v-if="themeMode === 'light'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="5"/>
+                                <line x1="12" y1="1" x2="12" y2="3"/>
+                                <line x1="12" y1="21" x2="12" y2="23"/>
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                <line x1="1" y1="12" x2="3" y2="12"/>
+                                <line x1="21" y1="12" x2="23" y2="12"/>
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                            </svg>
+                            <svg v-else-if="themeMode === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                            </svg>
+                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </button>
+                        <div class="dropdown-menu" v-if="showThemeMenu">
+                            <button class="dropdown-item" @click="setTheme('light')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="5"/>
+                                    <line x1="12" y1="1" x2="12" y2="3"/>
+                                    <line x1="12" y1="21" x2="12" y2="23"/>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                    <line x1="1" y1="12" x2="3" y2="12"/>
+                                    <line x1="21" y1="12" x2="23" y2="12"/>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                </svg>
+                                <span>浅色模式</span>
+                            </button>
+                            <button class="dropdown-item" @click="setTheme('dark')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                                </svg>
+                                <span>深色模式</span>
+                            </button>
+                            <button class="dropdown-item" @click="setTheme('auto')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                                <span>跟随系统</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 语言切换下拉菜单 -->
+                    <div class="dropdown" @click="toggleLanguageMenu" v-click-outside="closeLanguageMenu">
+                        <button class="banner-icon-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="2" y1="12" x2="22" y2="12"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                        </button>
+                        <div class="dropdown-menu" v-if="showLanguageMenu">
+                            <button class="dropdown-item" @click="setLanguage('zh')">
+                                <span>🇨🇳</span>
+                                <span>中文</span>
+                            </button>
+                            <button class="dropdown-item" @click="setLanguage('en')">
+                                <span>🇺🇸</span>
+                                <span>English</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="banner-search">
                     <input 
@@ -161,7 +247,7 @@
 
             <!-- 页脚 -->
             <div class="footer">
-                <p>Powered by <strong>Uptime Kuma</strong> & <strong>Kuma Lite</strong></p>
+                <p>Powered by <a href="https://github.com/louislam/uptime-kuma" target="_blank" rel="noopener noreferrer"><strong>Uptime Kuma</strong></a> & <a href="https://github.com/ziwiwiz/kuma-lite" target="_blank" rel="noopener noreferrer"><strong>Kuma Lite</strong></a></p>
             </div>
         </div>
     </div>

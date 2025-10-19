@@ -5,13 +5,35 @@
     box-sizing: border-box;
 }
 
+:root {
+    --bg-primary: #f5f5f5;
+    --bg-secondary: #ffffff;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --border-color: rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+html.dark-mode,
+body.dark-mode {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: #f5f5f5;
-    color: #333;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     line-height: 1.6;
     padding: 0;
     margin: 0;
+    transition: background 0.3s, color 0.3s;
 }
 
 #app {
@@ -27,13 +49,13 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    color: #666;
+    color: var(--text-secondary);
 }
 
 .loading-spinner {
     width: 50px;
     height: 50px;
-    border: 4px solid #e0e0e0;
+    border: 4px solid var(--border-color);
     border-top-color: #10b981;
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -90,6 +112,106 @@ body {
     flex: 1;
     font-size: 20px;
     font-weight: 600;
+}
+
+.banner-controls {
+    display: flex;
+    gap: 8px;
+    margin-right: 12px;
+}
+
+.dropdown {
+    position: relative;
+}
+
+.banner-icon-btn {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    color: white;
+}
+
+.banner-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.banner-icon-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    min-width: 160px;
+    padding: 8px;
+    z-index: 1000;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+body.dark-mode .dropdown-menu {
+    background: #2d2d2d;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: background 0.2s;
+    text-align: left;
+}
+
+body.dark-mode .dropdown-item {
+    color: #e0e0e0;
+}
+
+.dropdown-item:hover {
+    background: #f5f5f5;
+}
+
+body.dark-mode .dropdown-item:hover {
+    background: #3d3d3d;
+}
+
+.dropdown-item svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.dropdown-item span:first-child {
+    font-size: 18px;
 }
 
 .banner-search {
@@ -188,9 +310,9 @@ body {
     gap: 15px;
     margin-bottom: 30px;
     padding: 12px 20px;
-    background: white;
+    background: var(--bg-secondary);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn-pause, .btn-refresh {
@@ -229,7 +351,7 @@ body {
 .refresh-info {
     flex: 1;
     text-align: right;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
@@ -247,10 +369,10 @@ body {
 .group-title {
     font-size: 24px;
     font-weight: 700;
-    color: #1f2937;
+    color: var(--text-primary);
     margin-bottom: 18px;
     padding-bottom: 8px;
-    border-bottom: 3px solid #e5e7eb;
+    border-bottom: 3px solid var(--border-color);
 }
 
 /* 监控卡片网格 */
@@ -288,19 +410,19 @@ body {
 
 /* 监控卡片 */
 .monitor-card {
-    background: white;
+    background: var(--bg-secondary);
     border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-sm);
     transition: all 0.3s ease;
     overflow: hidden;
 }
 
 .monitor-card.expanded {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-md);
 }
 
 .monitor-card:hover .card-main {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
     transform: translateY(-2px);
 }
 
@@ -359,7 +481,7 @@ body {
 .monitor-name {
     font-size: 16px;
     font-weight: 600;
-    color: #1f2937;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -401,14 +523,14 @@ body {
 .uptime-percent {
     font-size: 15px;
     font-weight: 700;
-    color: #1f2937;
+    color: var(--text-primary);
 }
 
 /* 响应时间信息 */
 .response-info {
     margin-bottom: 10px;
     font-size: 13px;
-    color: #6b7280;
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -421,7 +543,7 @@ body {
 
 .response-value {
     font-weight: 500;
-    color: #1f2937;
+    color: var(--text-primary);
 }
 
 /* 状态条 */
@@ -464,6 +586,11 @@ body {
     margin-top: -8px;
 }
 
+body.dark-mode .custom-tooltip {
+    background: rgba(255, 255, 255, 0.95);
+    color: #1f2937;
+}
+
 .status-bar-item.up {
     background: #10b981;
 }
@@ -490,13 +617,13 @@ body {
 .chart-tabs button {
     flex: 1;
     padding: 6px 10px;
-    border: 1px solid #e5e7eb;
-    background: white;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s;
-    color: #6b7280;
+    color: var(--text-secondary);
 }
 
 .chart-tabs button:hover {
@@ -584,10 +711,20 @@ body {
     margin-top: 40px;
     padding: 20px;
     text-align: center;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
+.footer a {
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer a:hover {
+    color: #10b981;
+}
+
 .footer strong {
-    color: #1f2937;
+    color: inherit;
 }

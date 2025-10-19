@@ -12,6 +12,10 @@ const app = createApp({
             paused: false,
             compactMode: false, // 精简模式
             searchQuery: '', // 搜索关键词
+            themeMode: 'auto', // 主题模式：light/dark/auto
+            language: 'zh', // 语言（zh/en）
+            showThemeMenu: false, // 显示主题菜单
+            showLanguageMenu: false, // 显示语言菜单
             charts: {},
             refreshInterval: null,
             countdownInterval: null,
@@ -70,6 +74,29 @@ const app = createApp({
         const savedCompactMode = localStorage.getItem('compactMode');
         if (savedCompactMode !== null) {
             this.compactMode = savedCompactMode === 'true';
+        }
+        
+        // 从 localStorage 恢复主题模式
+        const savedThemeMode = localStorage.getItem('themeMode');
+        if (savedThemeMode) {
+            this.themeMode = savedThemeMode;
+        }
+        this.applyTheme();
+        
+        // 监听系统主题变化
+        if (window.matchMedia) {
+            const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            darkModeQuery.addEventListener('change', (e) => {
+                if (this.themeMode === 'auto') {
+                    this.applyTheme();
+                }
+            });
+        }
+        
+        // 从 localStorage 恢复语言设置
+        const savedLanguage = localStorage.getItem('language');
+        if (savedLanguage) {
+            this.language = savedLanguage;
         }
         
         this.fetchData();
@@ -339,6 +366,9 @@ const app = createApp({
                 ];
             });
             
+            // 获取主题颜色
+            const themeColors = this.getThemeColors();
+            
             const option = {
                 grid: {
                     left: '50px',
@@ -352,11 +382,11 @@ const app = createApp({
                     boundaryGap: true,  // 数据点居中
                     axisLabel: {
                         fontSize: 11,
-                        color: '#6b7280',
+                        color: themeColors.textColor,
                         interval: Math.floor(times.length / 4)
                     },
                     axisLine: {
-                        lineStyle: { color: '#e5e7eb' }
+                        lineStyle: { color: themeColors.lineColor }
                     },
                     axisTick: {
                         show: false
@@ -368,7 +398,7 @@ const app = createApp({
                     max: Math.round(maxTime),
                     axisLabel: {
                         fontSize: 11,
-                        color: '#6b7280'
+                        color: themeColors.textColor
                     },
                     axisLine: {
                         show: false
@@ -379,7 +409,7 @@ const app = createApp({
                     splitLine: {
                         show: true,
                         lineStyle: {
-                            color: '#e5e7eb',
+                            color: themeColors.gridLineColor,
                             width: 1,
                             type: 'dashed'
                         }
@@ -603,6 +633,70 @@ const app = createApp({
             this.onSearchInput();
         },
 
+        // 应用主题
+        applyTheme() {
+            let isDark = false;
+            
+            if (this.themeMode === 'dark') {
+                isDark = true;
+            } else if (this.themeMode === 'light') {
+                isDark = false;
+            } else { // auto
+                isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            
+            // 同时给 html 和 body 添加/移除 dark-mode class
+            document.documentElement.classList.toggle('dark-mode', isDark);
+            document.body.classList.toggle('dark-mode', isDark);
+            
+            // 重新渲染图表以适应新主题
+            if (!this.compactMode) {
+                this.$nextTick(() => {
+                    this.renderAllCharts();
+                });
+            }
+        },
+
+        // 设置主题模式
+        setTheme(mode) {
+            this.themeMode = mode;
+            localStorage.setItem('themeMode', mode);
+            this.applyTheme();
+            this.showThemeMenu = false;
+        },
+
+        // 切换主题菜单
+        toggleThemeMenu() {
+            this.showThemeMenu = !this.showThemeMenu;
+            this.showLanguageMenu = false;
+        },
+
+        // 关闭主题菜单
+        closeThemeMenu() {
+            this.showThemeMenu = false;
+        },
+
+        // 设置语言
+        setLanguage(lang) {
+            this.language = lang;
+            localStorage.setItem('language', lang);
+            this.showLanguageMenu = false;
+            
+            // TODO: 实现多语言支持
+            console.log('Language switched to:', lang);
+        },
+
+        // 切换语言菜单
+        toggleLanguageMenu() {
+            this.showLanguageMenu = !this.showLanguageMenu;
+            this.showThemeMenu = false;
+        },
+
+        // 关闭语言菜单
+        closeLanguageMenu() {
+            this.showLanguageMenu = false;
+        },
+
         // 切换所有分组展开/收起（预留功能）
         toggleAllGroups() {
             // TODO: 实现分组展开/收起功能
@@ -620,7 +714,32 @@ const app = createApp({
         // 隐藏 Tooltip
         hideTooltip() {
             this.tooltip.show = false;
+        },
+
+        // 获取主题颜色
+        getThemeColors() {
+            const isDark = document.body.classList.contains('dark-mode');
+            return {
+                textColor: isDark ? '#a0a0a0' : '#6b7280',
+                lineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb',
+                gridLineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb'
+            };
         }
+    }
+});
+
+// 自定义指令：点击外部关闭
+app.directive('click-outside', {
+    mounted(el, binding) {
+        el.clickOutsideEvent = function(event) {
+            if (!(el === event.target || el.contains(event.target))) {
+                binding.value();
+            }
+        };
+        document.addEventListener('click', el.clickOutsideEvent);
+    },
+    unmounted(el) {
+        document.removeEventListener('click', el.clickOutsideEvent);
     }
 });
 

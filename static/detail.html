@@ -2,9 +2,18 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <!-- 立即应用主题，避免闪烁 - 必须放在最前面 -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('themeMode') || 'auto';
+            if (savedTheme === 'dark' || (savedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark-mode');
+            }
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>监控详情 - Kuma Lite</title>
-    <link rel="stylesheet" href="/css/style-detail.css?v=20251019-clean">
+    <link rel="stylesheet" href="/css/style-detail.css?v=20251019-dark-mode">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>

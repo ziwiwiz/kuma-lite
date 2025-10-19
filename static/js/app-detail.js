@@ -93,6 +93,9 @@ const app = createApp({
         }
     },
     mounted() {
+        // 初始化主题
+        this.initTheme();
+        
         // 从 URL 获取监控 ID
         const urlParams = new URLSearchParams(window.location.search);
         this.monitorId = urlParams.get('id');
@@ -339,6 +342,9 @@ const app = createApp({
                 ];
             });
             
+            // 获取主题颜色
+            const themeColors = this.getThemeColors();
+            
             const option = {
                 grid: {
                     left: '50px',
@@ -352,12 +358,12 @@ const app = createApp({
                     boundaryGap: true,  // 数据点居中
                     axisLabel: {
                         fontSize: 12,
-                        color: '#6b7280',
+                        color: themeColors.textColor,
                         rotate: 0,
                         interval: Math.floor(times.length / 8)
                     },
                     axisLine: {
-                        lineStyle: { color: '#e5e7eb' }
+                        lineStyle: { color: themeColors.lineColor }
                     },
                     axisTick: {
                         show: false
@@ -369,7 +375,7 @@ const app = createApp({
                     max: Math.round(maxTime),
                     axisLabel: {
                         fontSize: 12,
-                        color: '#6b7280'
+                        color: themeColors.textColor
                     },
                     axisLine: {
                         show: false
@@ -380,7 +386,7 @@ const app = createApp({
                     splitLine: {
                         show: true,
                         lineStyle: {
-                            color: '#e5e7eb',
+                            color: themeColors.gridLineColor,
                             width: 1,
                             type: 'dashed'
                         }
@@ -688,6 +694,67 @@ const app = createApp({
                 this.countdown = 60;
                 this.fetchData(false);
             }
+        },
+
+        // 初始化主题
+        initTheme() {
+            const savedTheme = localStorage.getItem('themeMode') || 'auto';
+            console.log('Detail page - Loading theme:', savedTheme);
+            this.applyTheme(savedTheme);
+            
+            // 监听系统主题变化（当设置为 auto 时）
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                const currentTheme = localStorage.getItem('themeMode') || 'auto';
+                if (currentTheme === 'auto') {
+                    console.log('System theme changed, dark mode:', e.matches);
+                    document.documentElement.classList.toggle('dark-mode', e.matches);
+                    document.body.classList.toggle('dark-mode', e.matches);
+                    // 重新渲染图表
+                    if (this.chart && this.historyData.length > 0) {
+                        this.renderChart();
+                    }
+                }
+            });
+            
+            // 监听 localStorage 变化（从其他页面切换主题）
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'themeMode') {
+                    console.log('Theme changed from another tab:', e.newValue);
+                    this.applyTheme(e.newValue || 'auto');
+                }
+            });
+        },
+
+        // 应用主题
+        applyTheme(theme) {
+            console.log('Applying theme:', theme);
+            const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            
+            if (theme === 'auto') {
+                console.log('Auto mode - System prefers dark:', window.matchMedia('(prefers-color-scheme: dark)').matches);
+            } else {
+                console.log('Manual mode - Dark mode:', theme === 'dark');
+            }
+            
+            // 同时给 html 和 body 添加/移除 dark-mode class
+            document.documentElement.classList.toggle('dark-mode', isDark);
+            document.body.classList.toggle('dark-mode', isDark);
+            console.log('Body has dark-mode class:', document.body.classList.contains('dark-mode'));
+            
+            // 如果图表已存在，重新渲染以应用新主题
+            if (this.chart && this.historyData.length > 0) {
+                this.renderChart();
+            }
+        },
+
+        // 获取主题颜色
+        getThemeColors() {
+            const isDark = document.body.classList.contains('dark-mode');
+            return {
+                textColor: isDark ? '#a0a0a0' : '#6b7280',
+                lineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb',
+                gridLineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb'
+            };
         }
     }
 });
