@@ -185,9 +185,9 @@ const app = createApp({
                 this.loading = false;
                 this.countdown = 60;
 
-                // 更新图表（使用优化的更新方法）
+                // 更新图表（直接重新渲染确保所有配置正确应用）
                 this.$nextTick(() => {
-                    this.updateChart();
+                    this.renderChart();
                 });
             } catch (err) {
                 this.error = '获取数据失败: ' + (err.message || '未知错误');
@@ -326,22 +326,17 @@ const app = createApp({
                 maxTime = maxTime + margin;
             }
 
-            // 创建 Bar 遮罩数据：用 bar 覆盖离线/重试区域的趋势线
-            const barMaskData = data.map((item) => {
-                if (item.status === 1) {
-                    return null;  // 正常状态不显示 bar
-                }
-                const color = item.status === 2 
+            // 构建 markArea 配置（显示离线/重试背景）
+            const markAreaData = markAreas.map(area => {
+                const color = area.status === 2
                     ? 'rgba(245, 158, 11, 0.3)'  // 橙色 - 重试中
                     : 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
                 
-                return {
-                    value: Math.round(maxTime),  // bar 高度覆盖整个 Y 轴
-                    itemStyle: {
-                        color: color,
-                        borderWidth: 0
-                    }
-                };
+                // markArea 从 area.start 延伸到 area.end + 1，覆盖整个区域
+                return [
+                    { xAxis: area.start, itemStyle: { color: color } },
+                    { xAxis: area.end + 1 }  // +1 延伸到下一个刻度边界
+                ];
             });
             
             const option = {
@@ -391,6 +386,17 @@ const app = createApp({
                         }
                     }
                 },
+                // visualMap: 控制趋势线在不同区域的颜色
+                visualMap: {
+                    show: false,
+                    dimension: 0,  // 基于 x 轴索引
+                    pieces: data.map((item, index) => ({
+                        gte: index,
+                        lt: index + 1,
+                        color: item.status === 1 ? '#10b981' : 'transparent'  // 正常=绿色，离线/重试=透明
+                    })),
+                    seriesIndex: 0  // 只应用于趋势线 series
+                },
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: {
@@ -414,25 +420,20 @@ const app = createApp({
                 },
                 series: [
                     {
-                        // 趋势线（底层）
                         type: 'line',
                         data: responseTimes,
                         smooth: true,
                         showSymbol: false,
                         lineStyle: {
-                            width: 2,
-                            color: '#10b981'
+                            width: 2
+                            // 颜色由 visualMap 控制
                         },
-                        z: 1  // 底层
-                    },
-                    {
-                        // Bar 遮罩（上层）
-                        type: 'bar',
-                        data: barMaskData,
-                        barWidth: '100%',
-                        barGap: '-100%',  // 与趋势线重叠
-                        z: 10,  // 上层
-                        silent: false  // 允许 tooltip
+                        markArea: {
+                            silent: false,  // 允许 tooltip 穿透
+                            data: markAreaData,
+                            z: 10  // 上层，覆盖趋势线
+                        },
+                        z: 1  // 趋势线在底层
                     }
                 ]
             };
@@ -513,9 +514,27 @@ const app = createApp({
                 });
             });
 
-            const responseTimes = data.map(item => 
-                item.status === 1 ? item.responseTime : null
-            );
+            // 构建连续的响应时间数据（保持数据连续性）
+            let lastValidValue = null;
+            let firstValidValue = null;
+            
+            // 先找第一个有效值
+            for (let i = 0; i < data.length; i++) {
+                if (data[i].status === 1) {
+                    firstValidValue = data[i].responseTime;
+                    break;
+                }
+            }
+            
+            lastValidValue = firstValidValue;
+            const responseTimes = data.map(item => {
+                if (item.status === 1) {
+                    lastValidValue = item.responseTime;
+                    return item.responseTime;
+                }
+                // 离线/重试：使用前一个有效值
+                return lastValidValue;
+            });
 
             // 构建 markArea 数据
             const markAreas = [];
@@ -562,16 +581,16 @@ const app = createApp({
                     ? 'rgba(245, 158, 11, 0.3)'
                     : 'rgba(239, 68, 68, 0.3)';
                 
+                // markArea 从 area.start 延伸到 area.end + 1，覆盖整个区域
                 return [
                     { 
-                        xAxis: times[area.start],
+                        xAxis: area.start,
                         itemStyle: { 
-                            color: color,
-                            borderWidth: 0
+                            color: color
                         }
                     },
                     { 
-                        xAxis: times[area.end]
+                        xAxis: area.end + 1  // +1 延伸到下一个刻度边界
                     }
                 ];
             });
@@ -595,7 +614,7 @@ const app = createApp({
                 maxTime = maxTime + margin;
             }
 
-            // 使用 setOption 更新数据（notMerge: false 表示合并更新）
+            // 使用 setOption 更新数据（合并更新，保留其他配置）
             this.chart.setOption({
                 xAxis: {
                     data: times
@@ -603,13 +622,30 @@ const app = createApp({
                 yAxis: {
                     max: Math.round(maxTime)
                 },
+                visualMap: {
+                    pieces: data.map((item, index) => ({
+                        gte: index,
+                        lt: index + 1,
+                        color: item.status === 1 ? '#10b981' : 'transparent'
+                    }))
+                },
                 series: [{
+                    type: 'line',
                     data: responseTimes,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: {
+                        width: 2
+                        // 颜色由 visualMap 控制
+                    },
                     markArea: {
-                        data: markAreaData
-                    }
+                        silent: false,  // 允许 tooltip 穿透
+                        data: markAreaData,
+                        z: 10  // 上层，覆盖趋势线
+                    },
+                    z: 1  // 趋势线在底层
                 }]
-            }, false);  // notMerge = false, 性能更好
+            });  // 默认 notMerge: false，合并更新
         },
 
         // 开始自动刷新
