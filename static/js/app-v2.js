@@ -132,6 +132,7 @@ const app = createApp({
             monitors: [],
             stats: null,
             loading: true,
+            isInitialLoad: true, // 标记首次加载
             error: null,
             lastUpdate: '',
             countdown: 60,
@@ -242,7 +243,10 @@ const app = createApp({
             if (this.paused) return;
             
             try {
-                this.loading = true;
+                // 只在首次加载时显示 loading 状态
+                if (this.isInitialLoad) {
+                    this.loading = true;
+                }
                 this.error = null;
 
                 // 获取监控列表
@@ -271,45 +275,61 @@ const app = createApp({
                     second: '2-digit',
                     hour12: false
                 });
-                this.loading = false;
+                
+                if (this.isInitialLoad) {
+                    this.loading = false;
+                    this.isInitialLoad = false;
+                }
                 this.countdown = 60;
             } catch (err) {
                 this.error = '获取数据失败: ' + (err.message || '未知错误');
                 this.loading = false;
+                this.isInitialLoad = false;
                 console.error('Fetch error:', err);
             }
         },
 
         // 获取所有监控项的历史数据
         async fetchAllHistory() {
-            const promises = this.monitors.map(async (monitor) => {
-                try {
-                    const res = await axios.get(`/api/monitors/${monitor.id}/history?hours=24`);
-                    if (res.data.success && res.data.data.length > 0) {
-                        monitor.statusHistory = res.data.data.slice(-100); // 最近100条
-                        // 计算平均响应时间
-                        const validResponses = res.data.data.filter(item => item.status === 1);
-                        if (validResponses.length > 0) {
-                            const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
-                            monitor.avgResponseTime = Math.round(sum / validResponses.length);
+            // 并发获取所有监控项的历史数据，限制并发数避免性能问题
+            const batchSize = 5; // 每批最多5个并发请求
+            const monitors = this.monitors;
+            
+            for (let i = 0; i < monitors.length; i += batchSize) {
+                const batch = monitors.slice(i, i + batchSize);
+                const promises = batch.map(async (monitor) => {
+                    try {
+                        const res = await axios.get(`/api/monitors/${monitor.id}/history?hours=24`);
+                        if (res.data.success && res.data.data.length > 0) {
+                            monitor.statusHistory = res.data.data.slice(-100); // 最近100条
+                            // 计算平均响应时间
+                            const validResponses = res.data.data.filter(item => item.status === 1);
+                            if (validResponses.length > 0) {
+                                const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
+                                monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                            }
+                        } else {
+                            monitor.statusHistory = [];
                         }
-                    } else {
+                    } catch (err) {
+                        console.error(`Failed to fetch history for monitor ${monitor.id}:`, err);
                         monitor.statusHistory = [];
                     }
-                } catch (err) {
-                    console.error(`Failed to fetch history for monitor ${monitor.id}:`, err);
-                    monitor.statusHistory = [];
-                }
-            });
-
-            await Promise.all(promises);
+                });
+                
+                await Promise.all(promises);
+            }
             
             // 使用 Vue 的 nextTick 确保 DOM 更新后再渲染图表
             this.$nextTick(() => {
-                // 增加延迟时间，确保图表容器已经完全渲染
-                setTimeout(() => {
+                // 首次加载需要延迟，后续刷新直接渲染
+                if (this.isInitialLoad) {
+                    setTimeout(() => {
+                        this.renderAllCharts();
+                    }, 300);
+                } else {
                     this.renderAllCharts();
-                }, 300);
+                }
             });
         },
 
@@ -388,13 +408,12 @@ const app = createApp({
                 return;
             }
 
-            // 销毁旧图表
-            if (this.charts[monitor.id]) {
-                this.charts[monitor.id].dispose();
+            // 如果图表已存在，直接更新而不是销毁重建
+            let chart = this.charts[monitor.id];
+            if (!chart) {
+                chart = echarts.init(chartEl);
+                this.charts[monitor.id] = chart;
             }
-
-            const chart = echarts.init(chartEl);
-            this.charts[monitor.id] = chart;
 
             // 根据选择的周期过滤数据
             const period = monitor.selectedPeriod || 50;
@@ -637,7 +656,8 @@ const app = createApp({
                 ]
             };
 
-            chart.setOption(option);
+            // 使用 notMerge: false 进行增量更新，提升性能
+            chart.setOption(option, { notMerge: false, lazyUpdate: true });
         },
 
         // 切换图表周期
