@@ -10,6 +10,8 @@ const app = createApp({
             lastUpdate: '',
             countdown: 60,
             paused: false,
+            compactMode: false, // 精简模式
+            searchQuery: '', // 搜索关键词
             charts: {},
             refreshInterval: null,
             countdownInterval: null,
@@ -24,8 +26,18 @@ const app = createApp({
     computed: {
         // 按组分类监控项，并按照 Kuma 原始配置的分组顺序排列
         groupedMonitors() {
+            // 先过滤搜索结果
+            let filteredMonitors = this.monitors;
+            if (this.searchQuery.trim()) {
+                const query = this.searchQuery.trim().toLowerCase();
+                filteredMonitors = this.monitors.filter(monitor => 
+                    monitor.name.toLowerCase().includes(query) ||
+                    (monitor.group && monitor.group.toLowerCase().includes(query))
+                );
+            }
+            
             const groups = {};
-            this.monitors.forEach(monitor => {
+            filteredMonitors.forEach(monitor => {
                 // 使用 Kuma API 返回的 group 字段
                 const groupName = monitor.group || 'other';
                 if (!groups[groupName]) {
@@ -54,6 +66,12 @@ const app = createApp({
         }
     },
     mounted() {
+        // 从 localStorage 恢复精简模式状态
+        const savedCompactMode = localStorage.getItem('compactMode');
+        if (savedCompactMode !== null) {
+            this.compactMode = savedCompactMode === 'true';
+        }
+        
         this.fetchData();
         this.startAutoRefresh();
     },
@@ -155,6 +173,11 @@ const app = createApp({
 
         // 渲染所有图表
         renderAllCharts() {
+            // 精简模式下不渲染图表
+            if (this.compactMode) {
+                return;
+            }
+            
             this.monitors.forEach(monitor => {
                 const chartEl = document.getElementById('chart-' + monitor.id);
                 if (chartEl) {
@@ -539,6 +562,45 @@ const app = createApp({
                 clearInterval(this.countdownInterval);
                 this.countdownInterval = null;
             }
+        },
+
+        // 切换精简模式
+        toggleCompactMode() {
+            this.compactMode = !this.compactMode;
+            
+            // 保存到 localStorage
+            localStorage.setItem('compactMode', this.compactMode);
+            
+            // 如果切换到精简模式，销毁所有图表
+            if (this.compactMode) {
+                Object.keys(this.charts).forEach(id => {
+                    if (this.charts[id]) {
+                        this.charts[id].dispose();
+                    }
+                });
+                this.charts = {};
+            } else {
+                // 切换回完整模式，重新渲染图表
+                this.$nextTick(() => {
+                    this.renderAllCharts();
+                });
+            }
+        },
+
+        // 搜索输入处理
+        onSearchInput() {
+            // 搜索时重新渲染图表
+            if (!this.compactMode) {
+                this.$nextTick(() => {
+                    this.renderAllCharts();
+                });
+            }
+        },
+
+        // 清除搜索
+        clearSearch() {
+            this.searchQuery = '';
+            this.onSearchInput();
         },
 
         // 切换所有分组展开/收起（预留功能）

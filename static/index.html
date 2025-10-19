@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kuma Lite - 服务监控</title>
-    <link rel="stylesheet" href="/css/style-v2.css?v=20251019-width">
+    <link rel="stylesheet" href="/css/style-v2.css?v=20251019-compact">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -31,8 +31,31 @@
                     <span v-else-if="stats">部分服务异常</span>
                     <span v-if="stats"> ({{ stats.upMonitors }}/{{ stats.totalMonitors }})</span>
                 </div>
-                <button class="banner-toggle" @click="toggleAllGroups">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="banner-search">
+                    <input 
+                        type="text" 
+                        v-model="searchQuery" 
+                        placeholder="搜索监控项..."
+                        class="search-input"
+                        @input="onSearchInput">
+                    <svg v-if="!searchQuery" class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    <button v-else class="clear-search" @click="clearSearch" title="清除搜索">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <button class="banner-toggle" @click="toggleCompactMode" :title="compactMode ? '切换到完整模式' : '切换到精简模式'">
+                    <svg v-if="!compactMode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7"/>
                         <rect x="14" y="3" width="7" height="7"/>
                         <rect x="3" y="14" width="7" height="7"/>
@@ -111,7 +134,7 @@
                                 </div>
 
                                 <!-- 图表切换按钮 -->
-                                <div class="chart-tabs">
+                                <div class="chart-tabs" v-if="!compactMode">
                                     <button 
                                         v-for="period in [100, 50, 25]" 
                                         :key="period"
@@ -122,7 +145,7 @@
                                 </div>
 
                                 <!-- 小图表 -->
-                                <div class="chart-container" :id="'chart-' + monitor.id"></div>
+                                <div class="chart-container" v-if="!compactMode" :id="'chart-' + monitor.id"></div>
                             </div>
                         </div>
                     </div>
@@ -143,6 +166,6 @@
         </div>
     </div>
 
-    <script src="/js/app-v2.js?v=20251019-markarea-visualmap"></script>
+    <script src="/js/app-v2.js?v=20251019-compact"></script>
 </body>
 </html>
