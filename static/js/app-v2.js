@@ -146,7 +146,6 @@ const app = createApp({
             charts: {},
             refreshInterval: null,
             countdownInterval: null,
-            historyCache: {}, // 前端历史数据缓存 { monitorId: { data: [], timestamp: 0 } }
             historyCacheTTL: 30000, // 前端缓存30秒(与后端一致)
             tooltip: {
                 show: false,
@@ -291,6 +290,42 @@ const app = createApp({
             }
         },
 
+        // localStorage 缓存辅助方法
+        getHistoryCache(monitorId) {
+            try {
+                const cacheKey = `history_cache_${monitorId}`;
+                const cached = localStorage.getItem(cacheKey);
+                if (!cached) return null;
+                
+                const { data, timestamp } = JSON.parse(cached);
+                const now = Date.now();
+                
+                // 检查缓存是否过期
+                if (now - timestamp > this.historyCacheTTL) {
+                    localStorage.removeItem(cacheKey);
+                    return null;
+                }
+                
+                return { data, timestamp };
+            } catch (err) {
+                console.error('Failed to get cache:', err);
+                return null;
+            }
+        },
+        
+        setHistoryCache(monitorId, data) {
+            try {
+                const cacheKey = `history_cache_${monitorId}`;
+                const cacheData = {
+                    data: data,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            } catch (err) {
+                console.error('Failed to set cache:', err);
+            }
+        },
+
         // 获取所有监控项的历史数据
         async fetchAllHistory() {
             // 并发获取所有监控项的历史数据，限制并发数避免性能问题
@@ -301,10 +336,10 @@ const app = createApp({
                 const batch = monitors.slice(i, i + batchSize);
                 const promises = batch.map(async (monitor) => {
                     try {
-                        // 检查前端缓存
-                        const cached = this.historyCache[monitor.id];
-                        const now = Date.now();
-                        if (cached && (now - cached.timestamp) < this.historyCacheTTL) {
+                        // 检查 localStorage 缓存
+                        const cached = this.getHistoryCache(monitor.id);
+                        
+                        if (cached) {
                             // 使用缓存数据
                             monitor.statusHistory = cached.data.slice(-100);
                             // 计算平均响应时间
@@ -326,11 +361,8 @@ const app = createApp({
                         // 缓存未命中,请求后端(主页只获取最近100条)
                         const res = await axios.get(`/api/monitors/${monitor.id}/history?limit=100`);
                         if (res.data.success && res.data.data.length > 0) {
-                            // 更新前端缓存
-                            this.historyCache[monitor.id] = {
-                                data: res.data.data,
-                                timestamp: now
-                            };
+                            // 更新 localStorage 缓存
+                            this.setHistoryCache(monitor.id, res.data.data);
                             
                             monitor.statusHistory = res.data.data.slice(-100); // 最近100条
                             // 计算平均响应时间
@@ -443,12 +475,15 @@ const app = createApp({
                 return;
             }
 
-            // 如果图表已存在，直接更新而不是销毁重建
+            // 如果图表已存在，先销毁再重建，确保配置完全刷新
             let chart = this.charts[monitor.id];
-            if (!chart) {
-                chart = echarts.init(chartEl);
-                this.charts[monitor.id] = chart;
+            if (chart) {
+                chart.dispose();
+                chart = null;
             }
+            
+            chart = echarts.init(chartEl);
+            this.charts[monitor.id] = chart;
 
             // 根据选择的周期过滤数据
             const period = monitor.selectedPeriod || 50;
@@ -691,8 +726,8 @@ const app = createApp({
                 ]
             };
 
-            // 使用 notMerge: false 进行增量更新，提升性能
-            chart.setOption(option, { notMerge: false, lazyUpdate: true });
+            // 设置图表配置
+            chart.setOption(option);
         },
 
         // 切换图表周期
