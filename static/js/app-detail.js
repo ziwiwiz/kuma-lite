@@ -460,7 +460,7 @@ const app = createApp({
                 grid: {
                     left: '50px',
                     right: '30px',
-                    bottom: '45px',
+                    bottom: window.innerWidth < 768 ? '60px' : '45px',  // 移动端需要更多底部空间
                     top: '20px'
                 },
                 xAxis: {
@@ -468,10 +468,10 @@ const app = createApp({
                     data: timesForAxis,  // x轴使用仅时间的数组
                     boundaryGap: true,  // 数据点居中
                     axisLabel: {
-                        fontSize: 12,
+                        fontSize: window.innerWidth < 768 ? 10 : 12,  // 移动端字体稍小
                         color: themeColors.textColor,
                         rotate: 0,
-                        interval: Math.floor(timesForAxis.length / 8)
+                        interval: Math.floor(timesForAxis.length / 4)  // 与主页一致，显示1/4的标签
                     },
                     axisLine: {
                         lineStyle: { color: themeColors.lineColor }
@@ -733,8 +733,16 @@ const app = createApp({
 
             // 使用 setOption 更新数据（合并更新，保留其他配置）
             this.chart.setOption({
+                grid: {
+                    bottom: window.innerWidth < 768 ? '60px' : '45px'  // 移动端需要更多底部空间
+                },
                 xAxis: {
-                    data: times
+                    data: times,
+                    axisLabel: {
+                        fontSize: window.innerWidth < 768 ? 10 : 12,
+                        rotate: window.innerWidth < 768 ? 45 : 0,
+                        interval: Math.floor(times.length / 4)
+                    }
                 },
                 yAxis: {
                     max: Math.round(maxTime)

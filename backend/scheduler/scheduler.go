@@ -1,10 +1,12 @@
 package scheduler
 
 import (
+	"kuma-lite/backend/cache"
 	"kuma-lite/backend/config"
 	"kuma-lite/backend/database"
 	"kuma-lite/backend/fetcher"
 	"log"
+	"strconv"
 	"time"
 )
 
@@ -83,6 +85,19 @@ func fetchAndStore() {
 	}
 
 	log.Printf("数据获取成功: %d 个监控项", len(monitors))
+	
+	// 数据获取成功后，清空相关缓存以便下次请求时获取最新数据
+	cache.Delete("monitors")
+	cache.Delete("stats")
+	
+	// 为每个监控项清空历史记录缓存（清空常用的时间范围）
+	for _, monitor := range monitors {
+		// 清空不同时间范围的历史记录缓存
+		for _, hours := range []string{"1", "3", "6", "12", "24", "48", "168"} {
+			cacheKey := "history_" + strconv.Itoa(monitor.ID) + "_" + hours
+			cache.Delete(cacheKey)
+		}
+	}
 }
 
 // cleanOldData 清理旧数据

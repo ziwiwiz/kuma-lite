@@ -91,6 +91,16 @@ func GetMonitorHistory(c *gin.Context) {
 		hours = 24
 	}
 
+	// 尝试从缓存获取历史数据
+	cacheKey := "history_" + idStr + "_" + hoursStr
+	if cached, found := cache.Get(cacheKey); found {
+		c.JSON(http.StatusOK, models.APIResponse{
+			Success: true,
+			Data:    cached,
+		})
+		return
+	}
+
 	heartbeats, err := database.GetHeartBeatHistory(id, hours)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -99,6 +109,9 @@ func GetMonitorHistory(c *gin.Context) {
 		})
 		return
 	}
+
+	// 存入缓存,历史数据缓存30秒
+	cache.Set(cacheKey, heartbeats, 30*time.Second)
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,

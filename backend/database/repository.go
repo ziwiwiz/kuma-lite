@@ -58,8 +58,14 @@ func GetHeartBeatHistory(monitorID int, hours int) ([]models.HeartBeat, error) {
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 
 	err := DB.Where("monitor_id = ? AND created_at >= ?", monitorID, since).
-		Order("created_at ASC").
+		Order("created_at DESC").
+		Limit(100).  // 限制最多返回100条记录
 		Find(&heartbeats).Error
+
+	// 反转结果，使其按时间升序排列
+	for i, j := 0, len(heartbeats)-1; i < j; i, j = i+1, j-1 {
+		heartbeats[i], heartbeats[j] = heartbeats[j], heartbeats[i]
+	}
 
 	return heartbeats, err
 }
