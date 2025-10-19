@@ -23,7 +23,7 @@
         <!-- 加载状态 -->
         <div class="loading-overlay" v-if="loading && !stats">
             <div class="loading-spinner"></div>
-            <p>加载监控数据中...</p>
+            <p>{{ t.loading }}</p>
         </div>
 
         <!-- 主内容 -->
@@ -36,8 +36,8 @@
                     </svg>
                 </div>
                 <div class="banner-text">
-                    <span v-if="stats && stats.downMonitors === 0">所有服务一切正常</span>
-                    <span v-else-if="stats">部分服务异常</span>
+                    <span v-if="stats && stats.downMonitors === 0">{{ t.allServices }} {{ t.normal }}</span>
+                    <span v-else-if="stats">{{ t.someServicesDown }}</span>
                     <span v-if="stats"> ({{ stats.upMonitors }}/{{ stats.totalMonitors }})</span>
                 </div>
                 <div class="banner-controls">
@@ -77,13 +77,13 @@
                                     <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
                                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                                 </svg>
-                                <span>浅色模式</span>
+                                <span>{{ t.light }}</span>
                             </button>
                             <button class="dropdown-item" @click="setTheme('dark')">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                                 </svg>
-                                <span>深色模式</span>
+                                <span>{{ t.dark }}</span>
                             </button>
                             <button class="dropdown-item" @click="setTheme('auto')">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -91,7 +91,7 @@
                                     <line x1="8" y1="21" x2="16" y2="21"/>
                                     <line x1="12" y1="17" x2="12" y2="21"/>
                                 </svg>
-                                <span>跟随系统</span>
+                                <span>{{ t.auto }}</span>
                             </button>
                         </div>
                     </div>
@@ -108,11 +108,11 @@
                         <div class="dropdown-menu" v-if="showLanguageMenu">
                             <button class="dropdown-item" @click="setLanguage('zh')">
                                 <span>🇨🇳</span>
-                                <span>中文</span>
+                                <span>{{ t.chinese }}</span>
                             </button>
                             <button class="dropdown-item" @click="setLanguage('en')">
                                 <span>🇺🇸</span>
-                                <span>English</span>
+                                <span>{{ t.english }}</span>
                             </button>
                         </div>
                     </div>
@@ -121,21 +121,21 @@
                     <input 
                         type="text" 
                         v-model="searchQuery" 
-                        placeholder="搜索监控项..."
+                        :placeholder="t.search"
                         class="search-input"
                         @input="onSearchInput">
                     <svg v-if="!searchQuery" class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"/>
                         <path d="m21 21-4.35-4.35"/>
                     </svg>
-                    <button v-else class="clear-search" @click="clearSearch" title="清除搜索">
+                    <button v-else class="clear-search" @click="clearSearch" :title="t.clearSearch">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"/>
                             <line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
                     </button>
                 </div>
-                <button class="banner-toggle" @click="toggleCompactMode" :title="compactMode ? '切换到完整模式' : '切换到精简模式'">
+                <button class="banner-toggle" @click="toggleCompactMode" :title="compactMode ? t.toggleToFull : t.toggleToCompact">
                     <svg v-if="!compactMode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="3" y1="6" x2="21" y2="6"/>
                         <line x1="3" y1="12" x2="21" y2="12"/>
@@ -153,12 +153,12 @@
             <!-- 控制栏 -->
             <div class="control-bar">
                 <button class="btn-pause" @click="togglePause">
-                    <span v-if="!paused">暂停</span>
-                    <span v-else>继续</span>
+                    <span v-if="!paused">{{ t.pause }}</span>
+                    <span v-else>{{ t.resume }}</span>
                 </button>
-                <button class="btn-refresh" @click="fetchData" :disabled="loading">立即刷新</button>
+                <button class="btn-refresh" @click="fetchData" :disabled="loading">{{ t.refresh }}</button>
                 <span class="refresh-info">
-                    上次刷新: {{ lastUpdate }} 将在 {{ countdown }} 秒后刷新
+                    {{ t.lastUpdateInfo.replace('{time}', lastUpdate).replace('{countdown}', countdown) }}
                 </span>
             </div>
 
@@ -203,8 +203,8 @@
 
                                 <!-- 响应时间信息 -->
                                 <div class="response-info">
-                                    <span><span class="response-label">LT:</span> <span class="response-value">{{ monitor.responseTime }} ms</span></span>
-                                    <span><span class="response-label">AL:</span> <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span></span>
+                                    <span><span class="response-label">LAST:</span> <span class="response-value">{{ monitor.responseTime }} ms</span></span>
+                                    <span><span class="response-label">AVG:</span> <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span></span>
                                     <span><span class="response-label">MAX:</span> <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span></span>
                                 </div>
 
@@ -226,7 +226,7 @@
                                         :key="period"
                                         :class="{ active: monitor.selectedPeriod === period }"
                                         @click.stop="changeChartPeriod(monitor.id, period)">
-                                        最近 {{ period }} 次
+                                        {{ formatLast(period) }}
                                     </button>
                                 </div>
 

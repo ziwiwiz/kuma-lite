@@ -1,5 +1,131 @@
 const { createApp } = Vue;
 
+// 多语言文本
+const i18n = {
+    zh: {
+        // 状态
+        allServices: '全部服务',
+        online: '在线',
+        offline: '离线',
+        down: '离线',
+        someServicesDown: '部分服务异常',
+        maintenance: '维护中',
+        retry: '重试中',
+        normal: '正常',
+        
+        // 统计
+        uptime: '可用性',
+        avgResponse: '平均响应',
+        currentResponse: '当前响应',
+        maxResponse: '最大响应',
+        
+        // 时间
+        lastUpdate: '最后更新',
+        autoRefresh: '自动刷新',
+        paused: '已暂停',
+        lastUpdateInfo: '上次刷新: {time} 将在 {countdown} 秒后刷新',
+        
+        // 操作
+        search: '搜索监控项或分组...',
+        clearSearch: '清除搜索',
+        compactMode: '精简模式',
+        toggleCompact: '切换精简模式',
+        toggleToFull: '切换到完整模式',
+        toggleToCompact: '切换到精简模式',
+        refresh: '刷新',
+        pause: '暂停',
+        resume: '继续',
+        
+        // 主题
+        theme: '主题',
+        light: '浅色',
+        dark: '深色',
+        auto: '跟随系统',
+        
+        // 语言
+        language: '语言',
+        chinese: '中文',
+        english: 'English',
+        
+        // 图表
+        responseTime: '响应时间',
+        last100: '最近 100 次',
+        last50: '最近 50 次',
+        last25: '最近 25 次',
+        
+        // 加载
+        loading: '加载监控数据中...',
+        
+        // 页脚
+        poweredBy: 'Powered by',
+        
+        // 其他
+        group: '分组',
+        other: '其他'
+    },
+    en: {
+        // Status
+        allServices: 'All Services',
+        online: 'Online',
+        offline: 'Offline',
+        down: 'Down',
+        someServicesDown: 'Some Services Down',
+        maintenance: 'Maintenance',
+        retry: 'Retry',
+        normal: 'Normal',
+        
+        // Statistics
+        uptime: 'Uptime',
+        avgResponse: 'Avg Response',
+        currentResponse: 'Current',
+        maxResponse: 'Max Response',
+        
+        // Time
+        lastUpdate: 'Last Update',
+        autoRefresh: 'Auto Refresh',
+        paused: 'Paused',
+        lastUpdateInfo: 'Last update: {time} will refresh in {countdown}s',
+        
+        // Actions
+        search: 'Search monitors or groups...',
+        clearSearch: 'Clear',
+        compactMode: 'Compact Mode',
+        toggleCompact: 'Toggle compact mode',
+        toggleToFull: 'Switch to full mode',
+        toggleToCompact: 'Switch to compact mode',
+        refresh: 'Refresh',
+        pause: 'Pause',
+        resume: 'Resume',
+        
+        // Theme
+        theme: 'Theme',
+        light: 'Light',
+        dark: 'Dark',
+        auto: 'Auto',
+        
+        // Language
+        language: 'Language',
+        chinese: '中文',
+        english: 'English',
+        
+        // Charts
+        responseTime: 'Response Time',
+        last100: 'Last 100',
+        last50: 'Last 50',
+        last25: 'Last 25',
+        
+        // Loading
+        loading: 'Loading monitoring data...',
+        
+        // Footer
+        poweredBy: 'Powered by',
+        
+        // Others
+        group: 'Group',
+        other: 'Other'
+    }
+};
+
 const app = createApp({
     data() {
         return {
@@ -67,6 +193,11 @@ const app = createApp({
                 .sort((a, b) => a.order - b.order);
             
             return result;
+        },
+        
+        // 翻译文本
+        t() {
+            return i18n[this.language] || i18n.zh;
         }
     },
     mounted() {
@@ -129,7 +260,17 @@ const app = createApp({
                     this.stats = statsRes.data.data;
                 }
 
-                this.lastUpdate = new Date().toLocaleString('zh-CN');
+                // 使用 24 小时制格式
+                const locale = this.language === 'zh' ? 'zh-CN' : 'en-US';
+                this.lastUpdate = new Date().toLocaleString(locale, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
                 this.loading = false;
                 this.countdown = 60;
             } catch (err) {
@@ -198,6 +339,14 @@ const app = createApp({
             return Math.max(...validTimes);
         },
 
+        // 本地化 "最近 N 次" 标签
+        formatLast(period) {
+            if (this.language === 'zh') {
+                return `最近 ${period} 次`;
+            }
+            return `Last ${period}`;
+        },
+
         // 渲染所有图表
         renderAllCharts() {
             // 精简模式下不渲染图表
@@ -251,12 +400,29 @@ const app = createApp({
             const period = monitor.selectedPeriod || 50;
             const data = this.getDisplayHistory(monitor);
 
-            const times = data.map(item => {
+            // 生成两个时间数组：
+            // 1. timesForAxis: 用于x轴显示（仅时:分:秒）
+            // 2. timesForTooltip: 用于tooltip显示（包含年月日）
+            const timesForAxis = data.map(item => {
                 const date = new Date(item.createdAt);
-                return date.toLocaleTimeString('zh-CN', { 
+                return date.toLocaleString('zh-CN', { 
                     hour: '2-digit', 
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    hour12: false
+                });
+            });
+            
+            const timesForTooltip = data.map(item => {
+                const date = new Date(item.createdAt);
+                return date.toLocaleString('zh-CN', { 
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
                 });
             });
 
@@ -378,12 +544,12 @@ const app = createApp({
                 },
                 xAxis: {
                     type: 'category',
-                    data: times,
+                    data: timesForAxis,  // x轴使用仅时间的数组
                     boundaryGap: true,  // 数据点居中
                     axisLabel: {
                         fontSize: 11,
                         color: themeColors.textColor,
-                        interval: Math.floor(times.length / 4)
+                        interval: Math.floor(timesForAxis.length / 4)
                     },
                     axisLine: {
                         lineStyle: { color: themeColors.lineColor }
@@ -437,13 +603,17 @@ const app = createApp({
                     formatter: (params) => {
                         const dataIndex = params[0].dataIndex;
                         const item = data[dataIndex];
-                        const time = times[dataIndex];
+                        const time = timesForTooltip[dataIndex];  // 使用完整时间（包含年月日）
+                        const t = i18n[this.language];
+                        const statusLabel = this.language === 'zh' ? '状态' : 'Status';
+                        const responseLabel = this.language === 'zh' ? '响应' : 'Response';
+                        
                         if (item.status === 1) {
-                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #10b981;">正常</span><br/>响应: ${item.responseTime}ms</div>`;
+                            return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #10b981;">${t.normal}</span><br/>${responseLabel}: ${item.responseTime}ms</div>`;
                         } else if (item.status === 2) {
-                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #f59e0b;">重试中</span></div>`;
+                            return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #f59e0b;">${t.retry}</span></div>`;
                         } else {
-                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #ef4444;">离线</span></div>`;
+                            return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #ef4444;">${t.offline}</span></div>`;
                         }
                     }
                 },
@@ -512,13 +682,25 @@ const app = createApp({
 
         // 获取状态标题
         getStatusTitle(item) {
-            const time = new Date(item.createdAt).toLocaleString('zh-CN');
+            const locale = this.language === 'zh' ? 'zh-CN' : 'en-US';
+            // 使用 24 小时制格式
+            const time = new Date(item.createdAt).toLocaleString(locale, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            const t = this.t;
+            
             if (item.status === 1) {
-                return `${time} - 正常 (${item.responseTime}ms)`;
+                return `${time} - ${t.normal} (${item.responseTime}ms)`;
             } else if (item.status === 2) {
-                return `${time} - 重试中`;
+                return `${time} - ${t.retry}`;
             } else {
-                return `${time} - 离线`;
+                return `${time} - ${t.offline}`;
             }
         },
 
@@ -682,8 +864,12 @@ const app = createApp({
             localStorage.setItem('language', lang);
             this.showLanguageMenu = false;
             
-            // TODO: 实现多语言支持
-            console.log('Language switched to:', lang);
+            // 重新渲染图表以更新图表中的文本
+            if (!this.compactMode) {
+                this.$nextTick(() => {
+                    this.renderAllCharts();
+                });
+            }
         },
 
         // 切换语言菜单

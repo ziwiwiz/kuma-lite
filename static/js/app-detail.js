@@ -1,5 +1,79 @@
 const { createApp } = Vue;
 
+// 多语言文本 - 详情页
+const i18nDetail = {
+    zh: {
+        // 页面标题
+        monitorDetail: '监控详情',
+        loading: '加载监控数据中...',
+        
+        // 周期选择
+        recent: '最近',
+        
+        // 统计标签
+        totalChecks: '总检测',
+        onlineChecks: '在线',
+        onlineRate: '在线率',
+        currentResponse: '当前',
+        avgResponse: '平均',
+        maxResponse: '最大',
+        
+        // 图表
+        responseTime: '响应时间',
+        
+        // 状态
+        online: '在线',
+        retry: '重试中',
+        offline: '离线',
+        normal: '正常',
+        
+        // Tooltip
+        status: '状态',
+        response: '响应',
+        
+        // 错误
+        noMonitorId: '未指定监控 ID',
+        
+        // 单位
+        ms: 'ms'
+    },
+    en: {
+        // Page title
+        monitorDetail: 'Monitor Detail',
+        loading: 'Loading monitor data...',
+        
+        // Period selection
+        recent: 'Recent',
+        
+        // Statistics labels
+        totalChecks: 'Total',
+        onlineChecks: 'Online',
+        onlineRate: 'Uptime',
+        currentResponse: 'Current',
+        avgResponse: 'Average',
+        maxResponse: 'Maximum',
+        
+        // Chart
+        responseTime: 'Response Time',
+        
+        // Status
+        online: 'Online',
+        retry: 'Retry',
+        offline: 'Offline',
+        normal: 'Normal',
+        
+        // Tooltip
+        status: 'Status',
+        response: 'Response',
+        
+        // Error
+        noMonitorId: 'No monitor ID specified',
+        
+        // Unit
+        ms: 'ms'
+    }
+};
+
 const app = createApp({
     data() {
         return {
@@ -8,14 +82,15 @@ const app = createApp({
             historyData: [],
             loading: true,
             error: null,
-            selectedPeriod: 'recent',  // 默认"最近"
+            language: 'zh', // 语言设置
+            selectedPeriod: 'recent',
             showPeriodDropdown: false,
             periodOptions: [
-                { value: 'recent', label: '最近', hours: null },
-                { value: '3h', label: '3h', hours: 3 },
-                { value: '6h', label: '6h', hours: 6 },
-                { value: '24h', label: '24h', hours: 24 },
-                { value: '1w', label: '1w', hours: 168 }
+                { value: 'recent', hours: null },
+                { value: '3h', hours: 3 },
+                { value: '6h', hours: 6 },
+                { value: '24h', hours: 24 },
+                { value: '1w', hours: 168 }
             ],
             chart: null,
             tooltip: {
@@ -50,9 +125,21 @@ const app = createApp({
             const hoursAgo = new Date(Date.now() - selectedOption.hours * 60 * 60 * 1000);
             return this.historyData.filter(item => new Date(item.createdAt) >= hoursAgo);
         },
+        
+        // 翻译文本
+        t() {
+            return i18nDetail[this.language] || i18nDetail.zh;
+        },
+        
+        // 获取周期标签
         selectedPeriodLabel() {
             const option = this.periodOptions.find(opt => opt.value === this.selectedPeriod);
-            return option ? option.label : '最近';
+            if (!option) return this.t.recent;
+            
+            if (option.value === 'recent') {
+                return this.t.recent;
+            }
+            return option.value; // 对于 3h, 6h 等直接返回
         },
         avgResponseTime() {
             if (!this.displayHistory || this.displayHistory.length === 0) return 0;
@@ -67,9 +154,9 @@ const app = createApp({
             if (latest.status === 1) {
                 return latest.responseTime;
             } else if (latest.status === 2) {
-                return '重试中';
+                return this.t.retry;
             } else {
-                return '离线';
+                return this.t.offline;
             }
         },
         maxResponseTime() {
@@ -96,12 +183,18 @@ const app = createApp({
         // 初始化主题
         this.initTheme();
         
+        // 从 localStorage 恢复语言设置
+        const savedLanguage = localStorage.getItem('language');
+        if (savedLanguage) {
+            this.language = savedLanguage;
+        }
+        
         // 从 URL 获取监控 ID
         const urlParams = new URLSearchParams(window.location.search);
         this.monitorId = urlParams.get('id');
         
         if (!this.monitorId) {
-            this.error = '未指定监控 ID';
+            this.error = this.t.noMonitorId;
             this.loading = false;
             return;
         }
@@ -228,11 +321,29 @@ const app = createApp({
 
             const data = this.displayHistory;
 
-            const times = data.map(item => {
+            // 生成两个时间数组：
+            // 1. timesForAxis: 用于x轴显示（仅时:分:秒）
+            // 2. timesForTooltip: 用于tooltip显示（包含年月日）
+            const timesForAxis = data.map(item => {
                 const date = new Date(item.createdAt);
-                return date.toLocaleTimeString('zh-CN', { 
+                return date.toLocaleString('zh-CN', { 
                     hour: '2-digit', 
-                    minute: '2-digit'
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            });
+            
+            const timesForTooltip = data.map(item => {
+                const date = new Date(item.createdAt);
+                return date.toLocaleString('zh-CN', { 
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
                 });
             });
 
@@ -354,13 +465,13 @@ const app = createApp({
                 },
                 xAxis: {
                     type: 'category',
-                    data: times,
+                    data: timesForAxis,  // x轴使用仅时间的数组
                     boundaryGap: true,  // 数据点居中
                     axisLabel: {
                         fontSize: 12,
                         color: themeColors.textColor,
                         rotate: 0,
-                        interval: Math.floor(times.length / 8)
+                        interval: Math.floor(timesForAxis.length / 8)
                     },
                     axisLine: {
                         lineStyle: { color: themeColors.lineColor }
@@ -414,13 +525,13 @@ const app = createApp({
                     formatter: (params) => {
                         const dataIndex = params[0].dataIndex;
                         const item = data[dataIndex];
-                        const time = times[dataIndex];
+                        const time = timesForTooltip[dataIndex];  // 使用完整时间（包含年月日）
                         if (item.status === 1) {
-                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #10b981;">正常</span><br/>响应: ${item.responseTime}ms</div>`;
+                            return `<div style="text-align: left;">${time}<br/>${this.t.status}: <span style="color: #10b981;">${this.t.normal}</span><br/>${this.t.response}: ${item.responseTime}${this.t.ms}</div>`;
                         } else if (item.status === 2) {
-                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #f59e0b;">重试中</span></div>`;
+                            return `<div style="text-align: left;">${time}<br/>${this.t.status}: <span style="color: #f59e0b;">${this.t.retry}</span></div>`;
                         } else {
-                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #ef4444;">离线</span></div>`;
+                            return `<div style="text-align: left;">${time}<br/>${this.t.status}: <span style="color: #ef4444;">${this.t.offline}</span></div>`;
                         }
                     }
                 },

@@ -23,7 +23,7 @@
         <!-- 加载状态 -->
         <div class="loading-overlay" v-if="loading && !monitor">
             <div class="loading-spinner"></div>
-            <p>加载监控数据中...</p>
+            <p>{{ t.loading }}</p>
         </div>
 
         <!-- 主内容 -->
@@ -53,7 +53,7 @@
                                  class="period-dropdown-item"
                                  :class="{ active: selectedPeriod === option.value }"
                                  @click="changePeriod(option.value)">
-                                {{ option.label }}
+                                {{ option.value === 'recent' ? t.recent : option.value }}
                             </div>
                         </div>
                     </div>
@@ -61,28 +61,28 @@
 
                 <div class="info-stats">
                     <div class="stat-box">
-                        <span class="stat-label">总检测:</span>
+                        <span class="stat-label">{{ t.totalChecks }}:</span>
                         <span class="stat-value">{{ totalChecks }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">在线:</span>
+                        <span class="stat-label">{{ t.onlineChecks }}:</span>
                         <span class="stat-value">{{ onlineChecks }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">在线率:</span>
+                        <span class="stat-label">{{ t.onlineRate }}:</span>
                         <span class="stat-value">{{ onlineRate }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">当前:</span>
-                        <span class="stat-value">{{ currentResponseTime }}<span v-if="typeof currentResponseTime === 'number'">ms</span></span>
+                        <span class="stat-label">{{ t.currentResponse }}:</span>
+                        <span class="stat-value">{{ currentResponseTime }}<span v-if="typeof currentResponseTime === 'number'">{{ t.ms }}</span></span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">平均:</span>
-                        <span class="stat-value">{{ avgResponseTime }}ms</span>
+                        <span class="stat-label">{{ t.avgResponse }}:</span>
+                        <span class="stat-value">{{ avgResponseTime }}{{ t.ms }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">最大:</span>
-                        <span class="stat-value">{{ maxResponseTime }}ms</span>
+                        <span class="stat-label">{{ t.maxResponse }}:</span>
+                        <span class="stat-value">{{ maxResponseTime }}{{ t.ms }}</span>
                     </div>
                 </div>
             </div>
@@ -90,19 +90,19 @@
             <!-- 响应时间趋势图 -->
             <div class="chart-section">
                 <div class="chart-legend-bar">
-                    <span class="chart-y-label">响应时间 (ms)</span>
+                    <span class="chart-y-label">{{ t.responseTime }} ({{ t.ms }})</span>
                     <div class="status-legend">
                         <div class="legend-item">
                             <span class="legend-color" style="background: #10b981;"></span>
-                            <span>在线</span>
+                            <span>{{ t.online }}</span>
                         </div>
                         <div class="legend-item">
                             <span class="legend-color" style="background-color: #f59e0b;"></span>
-                            <span>重试中</span>
+                            <span>{{ t.retry }}</span>
                         </div>
                         <div class="legend-item">
                             <span class="legend-color" style="background-color: #ef4444;"></span>
-                            <span>离线</span>
+                            <span>{{ t.offline }}</span>
                         </div>
                     </div>
                 </div>
