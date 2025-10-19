@@ -74,8 +74,8 @@ func GetStats() (*models.Stats, error) {
 	// 正常监控数
 	DB.Model(&models.Monitor{}).Where("status = ?", 1).Count(&stats.UpMonitors)
 
-	// 异常监控数
-	DB.Model(&models.Monitor{}).Where("status = ?", 0).Count(&stats.DownMonitors)
+	// 异常监控数（包括离线和重试中）
+	DB.Model(&models.Monitor{}).Where("status IN ?", []int{0, 2}).Count(&stats.DownMonitors)
 
 	// 平均可用率
 	var avgUptime float64
