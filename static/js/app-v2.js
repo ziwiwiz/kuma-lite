@@ -146,6 +146,8 @@ const app = createApp({
             charts: {},
             refreshInterval: null,
             countdownInterval: null,
+            historyCache: {}, // 前端历史数据缓存 { monitorId: { data: [], timestamp: 0 } }
+            historyCacheTTL: 30000, // 前端缓存30秒(与后端一致)
             tooltip: {
                 show: false,
                 text: '',
@@ -299,14 +301,50 @@ const app = createApp({
                 const batch = monitors.slice(i, i + batchSize);
                 const promises = batch.map(async (monitor) => {
                     try {
+                        // 检查前端缓存
+                        const cached = this.historyCache[monitor.id];
+                        const now = Date.now();
+                        if (cached && (now - cached.timestamp) < this.historyCacheTTL) {
+                            // 使用缓存数据
+                            monitor.statusHistory = cached.data.slice(-100);
+                            // 计算平均响应时间
+                            const validResponses = cached.data.filter(item => item.status === 1);
+                            if (validResponses.length > 0) {
+                                const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
+                                monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                            }
+                            
+                            // 缓存命中,立即渲染图表(非精简模式)
+                            if (!this.compactMode && !this.isInitialLoad) {
+                                this.$nextTick(() => {
+                                    this.renderChart(monitor);
+                                });
+                            }
+                            return;
+                        }
+                        
+                        // 缓存未命中,请求后端
                         const res = await axios.get(`/api/monitors/${monitor.id}/history?hours=24`);
                         if (res.data.success && res.data.data.length > 0) {
+                            // 更新前端缓存
+                            this.historyCache[monitor.id] = {
+                                data: res.data.data,
+                                timestamp: now
+                            };
+                            
                             monitor.statusHistory = res.data.data.slice(-100); // 最近100条
                             // 计算平均响应时间
                             const validResponses = res.data.data.filter(item => item.status === 1);
                             if (validResponses.length > 0) {
                                 const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
                                 monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                            }
+                            
+                            // 请求完成后立即渲染图表(非精简模式)
+                            if (!this.compactMode && !this.isInitialLoad) {
+                                this.$nextTick(() => {
+                                    this.renderChart(monitor);
+                                });
                             }
                         } else {
                             monitor.statusHistory = [];
@@ -320,17 +358,14 @@ const app = createApp({
                 await Promise.all(promises);
             }
             
-            // 使用 Vue 的 nextTick 确保 DOM 更新后再渲染图表
-            this.$nextTick(() => {
-                // 首次加载需要延迟，后续刷新直接渲染
-                if (this.isInitialLoad) {
+            // 首次加载时统一渲染所有图表
+            if (this.isInitialLoad) {
+                this.$nextTick(() => {
                     setTimeout(() => {
                         this.renderAllCharts();
                     }, 300);
-                } else {
-                    this.renderAllCharts();
-                }
-            });
+                });
+            }
         },
 
         // 获取显示的历史数据（根据选择的周期）
