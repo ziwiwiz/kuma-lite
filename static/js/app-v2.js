@@ -323,8 +323,8 @@ const app = createApp({
                             return;
                         }
                         
-                        // 缓存未命中,请求后端
-                        const res = await axios.get(`/api/monitors/${monitor.id}/history?hours=24`);
+                        // 缓存未命中,请求后端(主页只获取最近100条)
+                        const res = await axios.get(`/api/monitors/${monitor.id}/history?limit=100`);
                         if (res.data.success && res.data.data.length > 0) {
                             // 更新前端缓存
                             this.historyCache[monitor.id] = {

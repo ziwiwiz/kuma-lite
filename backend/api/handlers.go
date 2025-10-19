@@ -84,30 +84,68 @@ func GetMonitorHistory(c *gin.Context) {
 		return
 	}
 
-	// 获取查询参数 hours,默认 24 小时
-	hoursStr := c.DefaultQuery("hours", "24")
-	hours, err := strconv.Atoi(hoursStr)
-	if err != nil || hours <= 0 {
-		hours = 24
-	}
-
-	// 尝试从缓存获取历史数据
-	cacheKey := "history_" + idStr + "_" + hoursStr
-	if cached, found := cache.Get(cacheKey); found {
-		c.JSON(http.StatusOK, models.APIResponse{
-			Success: true,
-			Data:    cached,
-		})
-		return
-	}
-
-	heartbeats, err := database.GetHeartBeatHistory(id, hours)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error:   "获取历史数据失败",
-		})
-		return
+	// 获取查询参数
+	limitStr := c.Query("limit")    // 限制条数(优先级高)
+	hoursStr := c.Query("hours")    // 时间范围
+	
+	var heartbeats []models.HeartBeat
+	var cacheKey string
+	
+	// 如果提供了 limit 参数,直接获取最近 N 条记录(不限制时间)
+	if limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit <= 0 {
+			limit = 100
+		}
+		
+		cacheKey = "history_" + idStr + "_limit_" + limitStr
+		
+		// 尝试从缓存获取
+		if cached, found := cache.Get(cacheKey); found {
+			c.JSON(http.StatusOK, models.APIResponse{
+				Success: true,
+				Data:    cached,
+			})
+			return
+		}
+		
+		heartbeats, err = database.GetRecentHeartBeats(id, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "获取历史数据失败",
+			})
+			return
+		}
+	} else {
+		// 使用 hours 参数(默认24小时)
+		hours := 24
+		if hoursStr != "" {
+			h, err := strconv.Atoi(hoursStr)
+			if err == nil && h > 0 {
+				hours = h
+			}
+		}
+		
+		cacheKey = "history_" + idStr + "_" + strconv.Itoa(hours) + "h"
+		
+		// 尝试从缓存获取
+		if cached, found := cache.Get(cacheKey); found {
+			c.JSON(http.StatusOK, models.APIResponse{
+				Success: true,
+				Data:    cached,
+			})
+			return
+		}
+		
+		heartbeats, err = database.GetHeartBeatHistory(id, hours)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "获取历史数据失败",
+			})
+			return
+		}
 	}
 
 	// 存入缓存,历史数据缓存30秒

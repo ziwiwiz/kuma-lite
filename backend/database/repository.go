@@ -52,7 +52,24 @@ func SaveHeartBeat(heartbeat *models.HeartBeat) error {
 	return DB.Create(heartbeat).Error
 }
 
-// GetHeartBeatHistory 获取监控项的历史心跳记录
+// GetRecentHeartBeats 获取监控项最近N条心跳记录(不限制时间范围)
+func GetRecentHeartBeats(monitorID int, limit int) ([]models.HeartBeat, error) {
+	var heartbeats []models.HeartBeat
+
+	err := DB.Where("monitor_id = ?", monitorID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&heartbeats).Error
+
+	// 反转结果，使其按时间升序排列
+	for i, j := 0, len(heartbeats)-1; i < j; i, j = i+1, j-1 {
+		heartbeats[i], heartbeats[j] = heartbeats[j], heartbeats[i]
+	}
+
+	return heartbeats, err
+}
+
+// GetHeartBeatHistory 获取监控项的历史心跳记录(按时间范围)
 func GetHeartBeatHistory(monitorID int, hours int) ([]models.HeartBeat, error) {
 	var heartbeats []models.HeartBeat
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)

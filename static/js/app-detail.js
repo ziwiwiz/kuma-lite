@@ -240,40 +240,74 @@ const app = createApp({
                     this.monitor = monitorRes.data.data;
                 }
 
-                // 智能增量更新：如果已有数据，只获取最新的数据
+                // 根据当前选择的周期决定请求方式
                 let historyRes;
-                if (this.historyData.length > 0 && !isInitial) {
-                    // 获取最后一条记录的时间
-                    const lastItem = this.historyData[this.historyData.length - 1];
-                    const lastTime = new Date(lastItem.createdAt);
-                    
-                    // 获取最近2分钟的数据（避免遗漏）
-                    const sinceMinutes = 2;
-                    historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?hours=24`);
-                    
-                    if (historyRes.data.success) {
-                        const newData = historyRes.data.data;
-                        // 只添加比最后一条记录更新的数据
-                        const incrementalData = newData.filter(item => 
-                            new Date(item.createdAt) > lastTime
-                        );
+                
+                if (this.selectedPeriod === 'recent') {
+                    // "最近"模式: 获取最近100条,使用 limit 参数
+                    if (this.historyData.length > 0 && !isInitial) {
+                        // 增量更新: 获取所有最近100条,然后前端过滤新数据
+                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?limit=100`);
                         
-                        if (incrementalData.length > 0) {
-                            // 追加新数据
-                            this.historyData = [...this.historyData, ...incrementalData];
-                            // 保持最近24小时的数据
-                            const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                            this.historyData = this.historyData.filter(item => 
-                                new Date(item.createdAt) >= cutoffTime
+                        if (historyRes.data.success) {
+                            const newData = historyRes.data.data;
+                            const lastItem = this.historyData[this.historyData.length - 1];
+                            const lastTime = new Date(lastItem.createdAt);
+                            
+                            // 只添加比最后一条记录更新的数据
+                            const incrementalData = newData.filter(item => 
+                                new Date(item.createdAt) > lastTime
                             );
-                            console.log(`增量更新: 添加了 ${incrementalData.length} 条新数据`);
+                            
+                            if (incrementalData.length > 0) {
+                                // 追加新数据
+                                this.historyData = [...this.historyData, ...incrementalData].slice(-100);
+                                console.log(`增量更新: 添加了 ${incrementalData.length} 条新数据`);
+                            }
+                        }
+                    } else {
+                        // 初次加载: 获取最近100条
+                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?limit=100`);
+                        if (historyRes.data.success) {
+                            this.historyData = historyRes.data.data;
                         }
                     }
                 } else {
-                    // 初次加载，获取完整的24小时历史数据
-                    historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?hours=24`);
-                    if (historyRes.data.success) {
-                        this.historyData = historyRes.data.data;
+                    // 其他时间周期模式(3h/6h/24h/1w): 使用 hours 参数
+                    const selectedOption = this.periodOptions.find(opt => opt.value === this.selectedPeriod);
+                    const hours = selectedOption ? selectedOption.hours : 24;
+                    
+                    if (this.historyData.length > 0 && !isInitial) {
+                        // 增量更新
+                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?hours=${hours}`);
+                        
+                        if (historyRes.data.success) {
+                            const newData = historyRes.data.data;
+                            const lastItem = this.historyData[this.historyData.length - 1];
+                            const lastTime = new Date(lastItem.createdAt);
+                            
+                            // 只添加比最后一条记录更新的数据
+                            const incrementalData = newData.filter(item => 
+                                new Date(item.createdAt) > lastTime
+                            );
+                            
+                            if (incrementalData.length > 0) {
+                                // 追加新数据
+                                this.historyData = [...this.historyData, ...incrementalData];
+                                // 保持指定时间范围的数据
+                                const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+                                this.historyData = this.historyData.filter(item => 
+                                    new Date(item.createdAt) >= cutoffTime
+                                );
+                                console.log(`增量更新: 添加了 ${incrementalData.length} 条新数据`);
+                            }
+                        }
+                    } else {
+                        // 初次加载: 获取指定时间范围的数据
+                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?hours=${hours}`);
+                        if (historyRes.data.success) {
+                            this.historyData = historyRes.data.data;
+                        }
                     }
                 }
 
@@ -291,11 +325,23 @@ const app = createApp({
             }
         },
         changePeriod(periodValue) {
+            const oldPeriod = this.selectedPeriod;
             this.selectedPeriod = periodValue;
             this.showPeriodDropdown = false;
-            this.$nextTick(() => {
-                this.renderChart();
-            });
+            
+            // 如果从"最近"切换到其他周期,或从其他周期切换到"最近",需要重新加载数据
+            const oldIsRecent = oldPeriod === 'recent';
+            const newIsRecent = periodValue === 'recent';
+            
+            if (oldIsRecent !== newIsRecent) {
+                // 切换了数据源模式,重新加载数据
+                this.fetchData(true); // true表示强制重新加载
+            } else {
+                // 同一数据源模式下切换,只需重新渲染
+                this.$nextTick(() => {
+                    this.renderChart();
+                });
+            }
         },
         togglePeriodDropdown() {
             this.showPeriodDropdown = !this.showPeriodDropdown;
