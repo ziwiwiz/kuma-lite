@@ -210,9 +210,27 @@ const app = createApp({
                 });
             });
 
-            const responseTimes = data.map(item => 
-                item.status === 1 ? item.responseTime : null
-            );
+            // 构建连续的响应时间数据（保持数据连续性）
+            let lastValidValue = null;
+            let firstValidValue = null;
+            
+            // 先找第一个有效值
+            for (let i = 0; i < data.length; i++) {
+                if (data[i].status === 1) {
+                    firstValidValue = data[i].responseTime;
+                    break;
+                }
+            }
+            
+            lastValidValue = firstValidValue;
+            const responseTimes = data.map(item => {
+                if (item.status === 1) {
+                    lastValidValue = item.responseTime;
+                    return item.responseTime;
+                }
+                // 离线/重试：使用前一个有效值
+                return lastValidValue;
+            });
 
             // 构建 markArea 数据 - 标记维护和离线时段
             const markAreas = [];
@@ -285,24 +303,22 @@ const app = createApp({
                 maxTime = maxTime + margin;
             }
 
-            // 转换为 ECharts markArea 格式
-            const markAreaData = markAreas.map(area => {
-                const color = area.status === 2 
-                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色半透明 - 重试中
-                    : 'rgba(239, 68, 68, 0.3)';   // 红色半透明 - 离线
+            // 创建 Bar 遮罩数据：用 bar 覆盖离线/重试区域的趋势线
+            const barMaskData = data.map((item) => {
+                if (item.status === 1) {
+                    return null;  // 正常状态不显示 bar
+                }
+                const color = item.status === 2 
+                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色 - 重试中
+                    : 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
                 
-                return [
-                    { 
-                        xAxis: times[area.start],
-                        itemStyle: { 
-                            color: color,
-                            borderWidth: 0
-                        }
-                    },
-                    { 
-                        xAxis: times[area.end]
+                return {
+                    value: Math.round(maxTime),  // bar 高度覆盖整个 Y 轴
+                    itemStyle: {
+                        color: color,
+                        borderWidth: 0
                     }
-                ];
+                };
             });
             
             const option = {
@@ -315,6 +331,7 @@ const app = createApp({
                 xAxis: {
                     type: 'category',
                     data: times,
+                    boundaryGap: true,  // 数据点居中
                     axisLabel: {
                         fontSize: 11,
                         color: '#6b7280',
@@ -322,6 +339,9 @@ const app = createApp({
                     },
                     axisLine: {
                         lineStyle: { color: '#e5e7eb' }
+                    },
+                    axisTick: {
+                        show: false
                     }
                 },
                 yAxis: {
@@ -332,9 +352,17 @@ const app = createApp({
                         fontSize: 11,
                         color: '#6b7280'
                     },
+                    axisLine: {
+                        show: false
+                    },
+                    axisTick: {
+                        show: false
+                    },
                     splitLine: {
+                        show: true,
                         lineStyle: {
-                            color: '#f3f4f6',
+                            color: '#e5e7eb',
+                            width: 1,
                             type: 'dashed'
                         }
                     }
@@ -352,26 +380,37 @@ const app = createApp({
                         const item = data[dataIndex];
                         const time = times[dataIndex];
                         if (item.status === 1) {
-                            return `${time} - 正常 (${item.responseTime}ms)`;
+                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #10b981;">正常</span><br/>响应: ${item.responseTime}ms</div>`;
+                        } else if (item.status === 2) {
+                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #f59e0b;">重试中</span></div>`;
                         } else {
-                            return `${time} - 离线/超时`;
+                            return `<div style="text-align: left;">${time}<br/>状态: <span style="color: #ef4444;">离线</span></div>`;
                         }
                     }
                 },
-                series: [{
-                    type: 'line',
-                    data: responseTimes,
-                    smooth: true,
-                    showSymbol: false,
-                    lineStyle: {
-                        width: 2,
-                        color: '#10b981'
+                series: [
+                    {
+                        // 趋势线（底层）
+                        type: 'line',
+                        data: responseTimes,
+                        smooth: true,
+                        showSymbol: false,
+                        lineStyle: {
+                            width: 2,
+                            color: '#10b981'
+                        },
+                        z: 1  // 底层
                     },
-                    markArea: {
-                        silent: true,
-                        data: markAreaData
+                    {
+                        // Bar 遮罩（上层）
+                        type: 'bar',
+                        data: barMaskData,
+                        barWidth: '100%',
+                        barGap: '-100%',  // 与趋势线重叠
+                        z: 10,  // 上层
+                        silent: false  // 允许 tooltip
                     }
-                }]
+                ]
             };
 
             chart.setOption(option);
