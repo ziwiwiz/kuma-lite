@@ -64,7 +64,13 @@ const app = createApp({
         currentResponseTime() {
             if (!this.historyData || this.historyData.length === 0) return '-';
             const latest = this.historyData[this.historyData.length - 1];
-            return latest.status === 1 ? latest.responseTime : '-';
+            if (latest.status === 1) {
+                return latest.responseTime;
+            } else if (latest.status === 2) {
+                return '重试中';
+            } else {
+                return '离线';
+            }
         },
         maxResponseTime() {
             if (!this.displayHistory || this.displayHistory.length === 0) return 0;
@@ -221,9 +227,7 @@ const app = createApp({
 
             const times = data.map(item => {
                 const date = new Date(item.createdAt);
-                return date.toLocaleString('zh-CN', { 
-                    month: '2-digit',
-                    day: '2-digit',
+                return date.toLocaleTimeString('zh-CN', { 
                     hour: '2-digit', 
                     minute: '2-digit'
                 });
@@ -503,9 +507,7 @@ const app = createApp({
             // 准备新数据
             const times = data.map(item => {
                 const date = new Date(item.createdAt);
-                return date.toLocaleString('zh-CN', { 
-                    month: '2-digit',
-                    day: '2-digit',
+                return date.toLocaleTimeString('zh-CN', { 
                     hour: '2-digit', 
                     minute: '2-digit'
                 });

@@ -65,7 +65,7 @@
                     </div>
                     <div class="stat-box">
                         <span class="stat-label">当前:</span>
-                        <span class="stat-value">{{ currentResponseTime }}ms</span>
+                        <span class="stat-value">{{ currentResponseTime }}<span v-if="typeof currentResponseTime === 'number'">ms</span></span>
                     </div>
                     <div class="stat-box">
                         <span class="stat-label">平均:</span>
@@ -116,6 +116,6 @@
         </div>
     </div>
 
-    <script src="/js/app-detail.js?v=20251019-bar-mask"></script>
+    <script src="/js/app-detail.js?v=20251019-status"></script>
 </body>
 </html>
