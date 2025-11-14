@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// SaveMonitor 保存或更新监控项
+// SaveMonitor 保存或更新监控项（只在必要时更新，减少频繁更新）
 func SaveMonitor(monitor *models.Monitor) error {
 	var existing models.Monitor
 	result := DB.Where("id = ?", monitor.ID).First(&existing)
@@ -16,14 +16,41 @@ func SaveMonitor(monitor *models.Monitor) error {
 		return DB.Create(monitor).Error
 	}
 
-	// 存在,更新记录
-	return DB.Model(&existing).Updates(monitor).Error
+	// 检查是否需要更新（只有关键字段变化时才更新）
+	needsUpdate := existing.Name != monitor.Name ||
+		existing.Type != monitor.Type ||
+		existing.URL != monitor.URL ||
+		existing.Group != monitor.Group ||
+		existing.GroupOrder != monitor.GroupOrder ||
+		existing.Order != monitor.Order ||
+		existing.Status != monitor.Status ||
+		existing.Uptime != monitor.Uptime
+
+	if !needsUpdate {
+		return nil // 没有变化，跳过更新
+	}
+
+	// 只更新需要的字段，保留 Enabled 状态
+	updates := map[string]interface{}{
+		"name":        monitor.Name,
+		"type":        monitor.Type,
+		"url":         monitor.URL,
+		"group":       monitor.Group,
+		"group_order": monitor.GroupOrder,
+		"order":       monitor.Order,
+		"status":      monitor.Status,
+		"uptime":      monitor.Uptime,
+	}
+
+	return DB.Model(&existing).Updates(updates).Error
 }
 
-// GetAllMonitors 获取所有监控项
+// GetAllMonitors 获取所有启用的监控项，按分组顺序和组内顺序排列
 func GetAllMonitors() ([]models.Monitor, error) {
 	var monitors []models.Monitor
-	err := DB.Order("id ASC").Find(&monitors).Error
+	err := DB.Where("enabled = ?", true).
+		Order("group_order ASC, `order` ASC").
+		Find(&monitors).Error
 	return monitors, err
 }
 
@@ -90,23 +117,39 @@ func GetHeartBeatHistory(monitorID int, hours int) ([]models.HeartBeat, error) {
 func GetStats() (*models.Stats, error) {
 	var stats models.Stats
 
+	// 只统计启用的监控项
+	query := DB.Model(&models.Monitor{}).Where("enabled = ?", true)
+
 	// 总监控数
-	DB.Model(&models.Monitor{}).Count(&stats.TotalMonitors)
+	query.Count(&stats.TotalMonitors)
 
 	// 正常监控数
-	DB.Model(&models.Monitor{}).Where("status = ?", 1).Count(&stats.UpMonitors)
+	DB.Model(&models.Monitor{}).Where("enabled = ? AND status = ?", true, 1).Count(&stats.UpMonitors)
 
 	// 异常监控数（包括离线和重试中）
-	DB.Model(&models.Monitor{}).Where("status IN ?", []int{0, 2}).Count(&stats.DownMonitors)
+	DB.Model(&models.Monitor{}).Where("enabled = ? AND status IN ?", true, []int{0, 2}).Count(&stats.DownMonitors)
 
 	// 平均可用率
 	var avgUptime float64
-	DB.Model(&models.Monitor{}).Select("AVG(uptime)").Scan(&avgUptime)
+	DB.Model(&models.Monitor{}).Where("enabled = ?", true).Select("AVG(uptime)").Scan(&avgUptime)
 	stats.AvgUptime = avgUptime
 
-	// 平均响应时间
+	// 平均响应时间需要从最近的心跳记录计算
+	// SQLite 不支持 DISTINCT ON，使用子查询和 GROUP BY
 	var avgResponseTime float64
-	DB.Model(&models.Monitor{}).Where("status = ?", 1).Select("AVG(response_time)").Scan(&avgResponseTime)
+	DB.Raw(`
+		SELECT AVG(response_time) 
+		FROM (
+			SELECT monitor_id, response_time
+			FROM heart_beats
+			WHERE (monitor_id, created_at) IN (
+				SELECT monitor_id, MAX(created_at)
+				FROM heart_beats
+				WHERE monitor_id IN (SELECT id FROM monitors WHERE enabled = ? AND status = ?)
+				GROUP BY monitor_id
+			)
+		) AS latest_heartbeats
+	`, true, 1).Scan(&avgResponseTime)
 	stats.AvgResponseTime = avgResponseTime
 
 	return &stats, nil

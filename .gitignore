@@ -32,3 +32,21 @@ vendor/
 # 临时文件
 tmp/
 temp/
+
+# 编译输出
+dist/
+
+# 测试脚本
+test-*.sh
+push-to-dockerhub.sh
+
+# 临时文档
+CACHE_OPTIMIZATION_FIX.md
+DOCKER_DEPLOYMENT.md
+OPTIMIZATION_LOG.md
+OPTIMIZATION_README.md
+OPTIMIZATION_SUMMARY.md
+
+# 测试和调试文件
+static/cache-debug.html
+static/test-detail-api.html

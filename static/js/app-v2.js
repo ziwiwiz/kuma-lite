@@ -146,7 +146,7 @@ const app = createApp({
             charts: {},
             refreshInterval: null,
             countdownInterval: null,
-            historyCacheTTL: 30000, // 前端缓存30秒(与后端一致)
+            historyCacheTTL: 300000, // 前端缓存5分钟(300秒)，避免频繁请求
             tooltip: {
                 show: false,
                 text: '',
@@ -280,6 +280,17 @@ const app = createApp({
                 if (this.isInitialLoad) {
                     this.loading = false;
                     this.isInitialLoad = false;
+                    
+                    // 首次加载完成后，渲染所有图表
+                    if (!this.compactMode) {
+                        this.$nextTick(() => {
+                            this.monitors.forEach(monitor => {
+                                if (monitor.statusHistory && monitor.statusHistory.length > 0) {
+                                    this.renderChart(monitor);
+                                }
+                            });
+                        });
+                    }
                 }
                 this.countdown = 60;
             } catch (err) {
@@ -291,9 +302,9 @@ const app = createApp({
         },
 
         // localStorage 缓存辅助方法
-        getHistoryCache(monitorId) {
+        getHistoryCache(monitorId, cacheType = 'limit_100') {
             try {
-                const cacheKey = `history_cache_${monitorId}`;
+                const cacheKey = `history_cache_${monitorId}_${cacheType}`;
                 const cached = localStorage.getItem(cacheKey);
                 if (!cached) return null;
                 
@@ -313,9 +324,9 @@ const app = createApp({
             }
         },
         
-        setHistoryCache(monitorId, data) {
+        setHistoryCache(monitorId, data, cacheType = 'limit_100') {
             try {
-                const cacheKey = `history_cache_${monitorId}`;
+                const cacheKey = `history_cache_${monitorId}_${cacheType}`;
                 const cacheData = {
                     data: data,
                     timestamp: Date.now()
@@ -326,68 +337,90 @@ const app = createApp({
             }
         },
 
-        // 获取所有监控项的历史数据
+        // 获取所有监控项的历史数据（优化：使用批量查询API）
         async fetchAllHistory() {
-            // 并发获取所有监控项的历史数据，限制并发数避免性能问题
-            const batchSize = 5; // 每批最多5个并发请求
             const monitors = this.monitors;
             
-            for (let i = 0; i < monitors.length; i += batchSize) {
-                const batch = monitors.slice(i, i + batchSize);
-                const promises = batch.map(async (monitor) => {
-                    try {
-                        // 检查 localStorage 缓存
-                        const cached = this.getHistoryCache(monitor.id);
-                        
-                        if (cached) {
-                            // 使用缓存数据
-                            monitor.statusHistory = cached.data.slice(-100);
-                            // 计算平均响应时间
-                            const validResponses = cached.data.filter(item => item.status === 1);
-                            if (validResponses.length > 0) {
-                                const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
-                                monitor.avgResponseTime = Math.round(sum / validResponses.length);
-                            }
-                            
-                            // 缓存命中,立即渲染图表(非精简模式)
-                            if (!this.compactMode && !this.isInitialLoad) {
-                                this.$nextTick(() => {
-                                    this.renderChart(monitor);
-                                });
-                            }
-                            return;
-                        }
-                        
-                        // 缓存未命中,请求后端(主页只获取最近100条)
-                        const res = await axios.get(`/api/monitors/${monitor.id}/history?limit=100`);
-                        if (res.data.success && res.data.data.length > 0) {
-                            // 更新 localStorage 缓存
-                            this.setHistoryCache(monitor.id, res.data.data);
-                            
-                            monitor.statusHistory = res.data.data.slice(-100); // 最近100条
-                            // 计算平均响应时间
-                            const validResponses = res.data.data.filter(item => item.status === 1);
-                            if (validResponses.length > 0) {
-                                const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
-                                monitor.avgResponseTime = Math.round(sum / validResponses.length);
-                            }
-                            
-                            // 请求完成后立即渲染图表(非精简模式)
-                            if (!this.compactMode && !this.isInitialLoad) {
-                                this.$nextTick(() => {
-                                    this.renderChart(monitor);
-                                });
-                            }
-                        } else {
-                            monitor.statusHistory = [];
-                        }
-                    } catch (err) {
-                        console.error(`Failed to fetch history for monitor ${monitor.id}:`, err);
-                        monitor.statusHistory = [];
+            // 先检查哪些监控项有缓存
+            const needFetch = [];
+            monitors.forEach(monitor => {
+                const cached = this.getHistoryCache(monitor.id);
+                if (cached) {
+                    // 使用缓存数据
+                    monitor.statusHistory = cached.data.slice(-100);
+                    // 计算平均响应时间
+                    const validResponses = cached.data.filter(item => item.status === 1);
+                    if (validResponses.length > 0) {
+                        const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
+                        monitor.avgResponseTime = Math.round(sum / validResponses.length);
                     }
-                });
-                
-                await Promise.all(promises);
+                    
+                    // 缓存命中,立即渲染图表(非精简模式)
+                    if (!this.compactMode && !this.isInitialLoad) {
+                        this.$nextTick(() => {
+                            this.renderChart(monitor);
+                        });
+                    }
+                } else {
+                    needFetch.push(monitor.id);
+                }
+            });
+            
+            // 如果有需要获取的数据，使用批量API
+            if (needFetch.length > 0) {
+                try {
+                    const res = await axios.post('/api/monitors/batch-history', {
+                        monitorIds: needFetch,
+                        limit: 100
+                    });
+                    
+                    if (res.data.success) {
+                        res.data.data.forEach(result => {
+                            const monitor = monitors.find(m => m.id === result.monitorId);
+                            if (monitor && result.heartbeats && result.heartbeats.length > 0) {
+                                // 更新 localStorage 缓存
+                                this.setHistoryCache(monitor.id, result.heartbeats);
+                                
+                                monitor.statusHistory = result.heartbeats.slice(-100);
+                                // 计算平均响应时间
+                                const validResponses = result.heartbeats.filter(item => item.status === 1);
+                                if (validResponses.length > 0) {
+                                    const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
+                                    monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                                }
+                                
+                                // 请求完成后立即渲染图表(非精简模式)
+                                if (!this.compactMode && !this.isInitialLoad) {
+                                    this.$nextTick(() => {
+                                        this.renderChart(monitor);
+                                    });
+                                }
+                            } else if (monitor) {
+                                monitor.statusHistory = [];
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch batch history:', err);
+                    // 失败时使用单个请求作为降级方案
+                    for (const monitorId of needFetch) {
+                        try {
+                            const monitor = monitors.find(m => m.id === monitorId);
+                            const res = await axios.get(`/api/monitors/${monitorId}/history?limit=100`);
+                            if (res.data.success && res.data.data.length > 0) {
+                                this.setHistoryCache(monitorId, res.data.data);
+                                monitor.statusHistory = res.data.data.slice(-100);
+                                const validResponses = res.data.data.filter(item => item.status === 1);
+                                if (validResponses.length > 0) {
+                                    const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
+                                    monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                                }
+                            }
+                        } catch (err2) {
+                            console.error(`Failed to fetch history for monitor ${monitorId}:`, err2);
+                        }
+                    }
+                }
             }
             
             // 首次加载时统一渲染所有图表
@@ -515,26 +548,49 @@ const app = createApp({
                 });
             });
 
-            // 构建连续的响应时间数据（保持数据连续性）
-            let lastValidValue = null;
-            let firstValidValue = null;
-            
-            // 先找第一个有效值
-            for (let i = 0; i < data.length; i++) {
-                if (data[i].status === 1) {
-                    firstValidValue = data[i].responseTime;
-                    break;
-                }
-            }
-            
-            lastValidValue = firstValidValue;
-            const responseTimes = data.map(item => {
+            // 构建响应时间数据（检测数据间隔，间隔过大时显示断点）
+            const responseTimes = data.map((item, index) => {
                 if (item.status === 1) {
-                    lastValidValue = item.responseTime;
+                    // 正常状态，显示响应时间
                     return item.responseTime;
                 }
-                // 离线/重试：使用前一个有效值
-                return lastValidValue;
+                
+                // 离线/重试状态，检查时间间隔
+                if (index > 0 && index < data.length - 1) {
+                    const prevTime = new Date(data[index - 1].createdAt);
+                    const currentTime = new Date(item.createdAt);
+                    const nextTime = new Date(data[index + 1].createdAt);
+                    
+                    // 计算与前后数据点的时间间隔（分钟）
+                    const intervalBefore = (currentTime - prevTime) / 1000 / 60;
+                    const intervalAfter = (nextTime - currentTime) / 1000 / 60;
+                    
+                    // 如果间隔超过 5 分钟，认为是数据缺失，显示为断点(null)
+                    // 否则使用前一个有效值保持连续性
+                    if (intervalBefore > 5 || intervalAfter > 5) {
+                        return null;
+                    }
+                }
+                
+                // 找最近的有效值
+                let nearestValue = null;
+                // 先向前查找
+                for (let i = index - 1; i >= 0; i--) {
+                    if (data[i].status === 1) {
+                        nearestValue = data[i].responseTime;
+                        break;
+                    }
+                }
+                // 如果前面没找到，向后查找
+                if (nearestValue === null) {
+                    for (let i = index + 1; i < data.length; i++) {
+                        if (data[i].status === 1) {
+                            nearestValue = data[i].responseTime;
+                            break;
+                        }
+                    }
+                }
+                return nearestValue;
             });
 
             // 构建 markArea 数据 - 标记维护和离线时段
@@ -712,6 +768,7 @@ const app = createApp({
                         data: responseTimes,
                         smooth: true,
                         showSymbol: false,
+                        connectNulls: false,  // 不连接 null 值，显示为断点
                         lineStyle: {
                             width: 2
                             // 颜色由 visualMap 控制
@@ -728,6 +785,17 @@ const app = createApp({
 
             // 设置图表配置
             chart.setOption(option);
+            
+            // 添加点击事件处理：点击图表内部不跳转，只显示详细信息
+            // 移除之前的点击事件监听器
+            chart.off('click');
+            
+            // 添加新的点击事件（阻止跳转到详情页）
+            chart.on('click', (params) => {
+                // 点击图表内部，不做跳转，tooltip已经显示了详细信息
+                // 如果需要，可以在这里添加其他交互逻辑
+                console.log('Chart point clicked:', params);
+            });
         },
 
         // 切换图表周期

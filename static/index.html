@@ -173,10 +173,9 @@
                     
                     <div class="monitor-cards">
                         <div v-for="monitor in group.monitors" :key="monitor.id" class="monitor-card">
-                            <!-- 卡片主要内容 - 点击跳转到详情页 -->
-                            <div class="card-main" @click="goToDetail(monitor.id)">
-                                <!-- 卡片头部 -->
-                                <div class="card-header">
+                            <div class="card-main">
+                                <!-- 卡片头部 - 点击可跳转 -->
+                                <div class="card-header" @click="goToDetail(monitor.id)" style="cursor: pointer;">
                                     <div class="monitor-title">
                                         <span class="status-icon" :class="getStatusIconClass(monitor.status)">
                                             <svg v-if="monitor.status === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -205,15 +204,15 @@
                                     </div>
                                 </div>
 
-                                <!-- 响应时间信息 -->
-                                <div class="response-info">
+                                <!-- 响应时间信息 - 点击可跳转 -->
+                                <div class="response-info" @click="goToDetail(monitor.id)" style="cursor: pointer;">
                                     <span><span class="response-label">LAST:</span> <span class="response-value">{{ monitor.responseTime }} ms</span></span>
                                     <span><span class="response-label">AVG:</span> <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span></span>
                                     <span><span class="response-label">MAX:</span> <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span></span>
                                 </div>
 
-                                <!-- 状态条 -->
-                                <div class="status-bar">
+                                <!-- 状态条 - 点击可跳转 -->
+                                <div class="status-bar" @click="goToDetail(monitor.id)" style="cursor: pointer;">
                                     <div v-for="(item, index) in getDisplayHistory(monitor)" 
                                          :key="index" 
                                          class="status-bar-item" 
@@ -223,18 +222,18 @@
                                     </div>
                                 </div>
 
-                                <!-- 图表切换按钮 -->
+                                <!-- 图表切换按钮 - 不跳转 -->
                                 <div class="chart-tabs" v-if="!compactMode">
                                     <button 
                                         v-for="period in [100, 50, 25]" 
                                         :key="period"
                                         :class="{ active: monitor.selectedPeriod === period }"
-                                        @click.stop="changeChartPeriod(monitor.id, period)">
+                                        @click="changeChartPeriod(monitor.id, period)">
                                         {{ formatLast(period) }}
                                     </button>
                                 </div>
 
-                                <!-- 小图表 -->
+                                <!-- 小图表 - 点击不跳转，通过JS事件处理 -->
                                 <div class="chart-container" v-if="!compactMode" :id="'chart-' + monitor.id"></div>
                             </div>
                         </div>

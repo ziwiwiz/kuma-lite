@@ -66,6 +66,10 @@ func fetchAndStore() {
 	}
 
 	// 保存监控项和心跳记录
+	// 记录哪些监控项有新数据
+	updatedMonitors := make(map[string]bool)
+	newHeartbeatCount := 0
+
 	for _, monitor := range monitors {
 		if err := database.SaveMonitor(&monitor); err != nil {
 			log.Printf("保存监控项失败 [%s]: %v", monitor.Name, err)
@@ -79,27 +83,30 @@ func fetchAndStore() {
 				if err := database.SaveHeartBeat(&hb); err != nil {
 					// 心跳记录可能重复，不打印错误
 					continue
+				} else {
+					// 有新的心跳记录，标记该监控项需要更新缓存
+					monitorIDStr := strconv.Itoa(monitor.ID)
+					if !updatedMonitors[monitorIDStr] {
+						updatedMonitors[monitorIDStr] = true
+						newHeartbeatCount++
+					}
 				}
 			}
 		}
 	}
 
-	log.Printf("数据获取成功: %d 个监控项", len(monitors))
+	if newHeartbeatCount > 0 {
+		log.Printf("数据获取成功: %d 个监控项, %d 个有新心跳数据", len(monitors), newHeartbeatCount)
 
-	// 数据获取成功后，清空相关缓存以便下次请求时获取最新数据
-	cache.Delete("monitors")
-	cache.Delete("stats")
-
-	// 为每个监控项清空历史记录缓存
-	for _, monitor := range monitors {
-		// 清空 limit 模式的缓存(主页使用)
-		cache.Delete("history_" + strconv.Itoa(monitor.ID) + "_limit_100")
-
-		// 清空不同时间范围的历史记录缓存(详情页使用)
-		for _, hours := range []string{"1", "3", "6", "12", "24", "48", "168"} {
-			cacheKey := "history_" + strconv.Itoa(monitor.ID) + "_" + hours + "h"
-			cache.Delete(cacheKey)
+		// 只为有新数据的监控项清空历史记录缓存
+		for monitorID := range updatedMonitors {
+			cache.InvalidateMonitorCache(monitorID)
 		}
+
+		// 清空监控项列表缓存（因为可能有状态变化）
+		cache.InvalidateAllMonitorCaches()
+	} else {
+		log.Printf("数据获取成功: %d 个监控项, 无新数据（缓存保留）", len(monitors))
 	}
 }
 

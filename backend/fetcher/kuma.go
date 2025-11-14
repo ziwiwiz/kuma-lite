@@ -31,6 +31,7 @@ type KumaMonitor struct {
 	Type    string `json:"type"`
 	URL     string `json:"url"`
 	SendUrl int    `json:"sendUrl"`
+	Order   int    `json:"order"` // Kuma 中的排序顺序
 }
 
 type KumaHeartBeat struct {
@@ -101,18 +102,25 @@ func fetchHeartbeatData(apiURL, slug string) (*KumaHeartBeatResponse, error) {
 func ParseMonitors(statusPage *KumaStatusPage, heartbeatData *KumaHeartBeatResponse) []models.Monitor {
 	var monitors []models.Monitor
 	for groupIndex, group := range statusPage.PublicGroupList {
-		for _, kumaMonitor := range group.MonitorList {
+		for monitorIndex, kumaMonitor := range group.MonitorList {
 			monitor := models.Monitor{
-				ID:           kumaMonitor.ID,
-				Name:         kumaMonitor.Name,
-				Type:         kumaMonitor.Type,
-				URL:          kumaMonitor.URL,
-				Group:        group.Name, // 保存 Kuma 分组名称
-				GroupOrder:   groupIndex, // 保存分组在原始列表中的顺序
-				Status:       0,
-				Uptime:       0,
-				ResponseTime: 0,
+				ID:         kumaMonitor.ID,
+				Name:       kumaMonitor.Name,
+				Type:       kumaMonitor.Type,
+				URL:        kumaMonitor.URL,
+				Group:      group.Name,        // 保存 Kuma 分组名称
+				GroupOrder: groupIndex,        // 保存分组在原始列表中的顺序
+				Order:      kumaMonitor.Order, // 保存监控项在组内的排序顺序（如果API提供）
+				Status:     0,
+				Enabled:    true, // 默认启用
+				Uptime:     0,
 			}
+
+			// 如果 Kuma API 没有提供 order，使用在列表中的索引
+			if monitor.Order == 0 {
+				monitor.Order = monitorIndex
+			}
+
 			if heartbeatData != nil {
 				monitorIDStr := fmt.Sprintf("%d", kumaMonitor.ID)
 				// UptimeList key format is "monitorID_period", e.g., "1_24" for 24-hour uptime
@@ -123,7 +131,6 @@ func ParseMonitors(statusPage *KumaStatusPage, heartbeatData *KumaHeartBeatRespo
 				if heartbeats, ok := heartbeatData.HeartbeatList[monitorIDStr]; ok && len(heartbeats) > 0 {
 					latestHeartBeat := heartbeats[len(heartbeats)-1]
 					monitor.Status = latestHeartBeat.Status
-					monitor.ResponseTime = int(latestHeartBeat.Ping)
 				}
 			}
 			monitors = append(monitors, monitor)

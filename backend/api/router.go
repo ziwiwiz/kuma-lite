@@ -18,6 +18,7 @@ func SetupRouter() *gin.Engine {
 		apiGroup.GET("/monitors", GetMonitors)
 		apiGroup.GET("/monitors/:id", GetMonitorByID)
 		apiGroup.GET("/monitors/:id/history", GetMonitorHistory)
+		apiGroup.POST("/monitors/batch-history", GetBatchMonitorHistory) // 批量查询历史记录
 		apiGroup.GET("/stats", GetStats)
 	}
 
@@ -27,6 +28,8 @@ func SetupRouter() *gin.Engine {
 	router.StaticFile("/", "./static/index.html")
 	router.StaticFile("/index.html", "./static/index.html")
 	router.StaticFile("/detail.html", "./static/detail.html")
+	router.StaticFile("/cache-debug.html", "./static/cache-debug.html")
+	router.StaticFile("/test-detail-api.html", "./static/test-detail-api.html")
 
 	return router
 }

@@ -20,6 +20,9 @@ type Config struct {
 	CacheDuration time.Duration
 	FetchInterval time.Duration
 
+	// 并发查询配置
+	ConcurrentQueryWorkers int // 并发查询'last 100次记录'的线程数
+
 	// 数据库配置
 	DBPath string
 
@@ -32,13 +35,14 @@ var AppConfig *Config
 // LoadConfig 加载配置
 func LoadConfig() *Config {
 	config := &Config{
-		KumaAPIURL:        getEnv("KUMA_API_URL", ""),
-		KumaStatusSlug:    getEnv("KUMA_STATUS_PAGE_SLUG", ""),
-		ServerPort:        getEnv("SERVER_PORT", "8080"),
-		CacheDuration:     time.Duration(getEnvInt("CACHE_DURATION", 60)) * time.Second,
-		FetchInterval:     time.Duration(getEnvInt("FETCH_INTERVAL", 60)) * time.Second,
-		DBPath:            getEnv("DB_PATH", "./data/kuma-lite.db"),
-		DataRetentionDays: getEnvInt("DATA_RETENTION_DAYS", 30),
+		KumaAPIURL:             getEnv("KUMA_API_URL", ""),
+		KumaStatusSlug:         getEnv("KUMA_STATUS_PAGE_SLUG", ""),
+		ServerPort:             getEnv("SERVER_PORT", "8080"),
+		CacheDuration:          time.Duration(getEnvInt("CACHE_DURATION", 60)) * time.Second,
+		FetchInterval:          time.Duration(getEnvInt("FETCH_INTERVAL", 60)) * time.Second,
+		ConcurrentQueryWorkers: getEnvInt("CONCURRENT_QUERY_WORKERS", 10), // 默认10个并发线程
+		DBPath:                 getEnv("DB_PATH", "./data/kuma-lite.db"),
+		DataRetentionDays:      getEnvInt("DATA_RETENTION_DAYS", 30),
 	}
 
 	// 验证必需配置

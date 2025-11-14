@@ -7,6 +7,7 @@ import (
 	"kuma-lite/backend/models"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -100,16 +101,11 @@ func GetMonitorHistory(c *gin.Context) {
 
 		cacheKey = "history_" + idStr + "_limit_" + limitStr
 
-		// 尝试从缓存获取
-		if cached, found := cache.Get(cacheKey); found {
-			c.JSON(http.StatusOK, models.APIResponse{
-				Success: true,
-				Data:    cached,
-			})
-			return
-		}
+		// 使用带锁的缓存获取，避免缓存击穿（主页使用，60秒缓存）
+		data, err := cache.GetOrSetWithLock(cacheKey, cache.MainPageCacheDuration, func() (interface{}, error) {
+			return database.GetRecentHeartBeats(id, limit)
+		})
 
-		heartbeats, err = database.GetRecentHeartBeats(id, limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, models.APIResponse{
 				Success: false,
@@ -117,6 +113,8 @@ func GetMonitorHistory(c *gin.Context) {
 			})
 			return
 		}
+
+		heartbeats = data.([]models.HeartBeat)
 	} else {
 		// 使用 hours 参数(默认24小时)
 		hours := 24
@@ -129,16 +127,11 @@ func GetMonitorHistory(c *gin.Context) {
 
 		cacheKey = "history_" + idStr + "_" + strconv.Itoa(hours) + "h"
 
-		// 尝试从缓存获取
-		if cached, found := cache.Get(cacheKey); found {
-			c.JSON(http.StatusOK, models.APIResponse{
-				Success: true,
-				Data:    cached,
-			})
-			return
-		}
+		// 详情页时间范围查询，使用较长的缓存时间（5分钟）
+		data, err := cache.GetOrSetWithLock(cacheKey, cache.DetailPageCacheDuration, func() (interface{}, error) {
+			return database.GetHeartBeatHistory(id, hours)
+		})
 
-		heartbeats, err = database.GetHeartBeatHistory(id, hours)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, models.APIResponse{
 				Success: false,
@@ -146,10 +139,9 @@ func GetMonitorHistory(c *gin.Context) {
 			})
 			return
 		}
-	}
 
-	// 存入缓存,历史数据缓存30秒
-	cache.Set(cacheKey, heartbeats, 30*time.Second)
+		heartbeats = data.([]models.HeartBeat)
+	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
@@ -184,6 +176,77 @@ func GetStats(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    stats,
+	})
+}
+
+// GetBatchMonitorHistory 批量获取多个监控项的历史记录（用于主页并发加载）
+func GetBatchMonitorHistory(c *gin.Context) {
+	// 获取监控项ID列表
+	var request struct {
+		MonitorIDs []int `json:"monitorIds" binding:"required"`
+		Limit      int   `json:"limit"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "无效的请求参数",
+		})
+		return
+	}
+
+	if request.Limit <= 0 {
+		request.Limit = 100
+	}
+
+	// 使用并发方式查询多个监控项的历史记录
+	type result struct {
+		MonitorID  int                `json:"monitorId"`
+		Heartbeats []models.HeartBeat `json:"heartbeats"`
+		Error      string             `json:"error,omitempty"`
+	}
+
+	results := make([]result, len(request.MonitorIDs))
+	var wg sync.WaitGroup
+
+	// 使用配置的并发数限制
+	semaphore := make(chan struct{}, config.AppConfig.ConcurrentQueryWorkers)
+
+	for i, monitorID := range request.MonitorIDs {
+		wg.Add(1)
+		go func(index, id int) {
+			defer wg.Done()
+
+			// 获取信号量
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			cacheKey := "history_" + strconv.Itoa(id) + "_limit_" + strconv.Itoa(request.Limit)
+
+			// 使用带锁的缓存获取，避免缓存击穿
+			data, err := cache.GetOrSetWithLock(cacheKey, cache.MainPageCacheDuration, func() (interface{}, error) {
+				return database.GetRecentHeartBeats(id, request.Limit)
+			})
+
+			if err != nil {
+				results[index] = result{
+					MonitorID: id,
+					Error:     "获取数据失败",
+				}
+			} else {
+				results[index] = result{
+					MonitorID:  id,
+					Heartbeats: data.([]models.HeartBeat),
+				}
+			}
+		}(i, monitorID)
+	}
+
+	wg.Wait()
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    results,
 	})
 }
 

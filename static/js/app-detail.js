@@ -104,26 +104,19 @@ const app = createApp({
             countdownInterval: null,
             countdown: 60,
             paused: false,
-            lastUpdate: ''
+            lastUpdate: '',
+            historyCacheTTL: 300000 // 前端缓存5分钟(300秒)，与主页一致
         };
     },
     computed: {
         displayHistory() {
             if (!this.historyData || this.historyData.length === 0) return [];
             
-            // 如果选择的是"最近",返回最后100条
-            if (this.selectedPeriod === 'recent') {
-                return this.historyData.slice(-100);
-            }
-            
-            // 否则根据小时数过滤
-            const selectedOption = this.periodOptions.find(opt => opt.value === this.selectedPeriod);
-            if (!selectedOption || !selectedOption.hours) {
-                return this.historyData.slice(-100);
-            }
-            
-            const hoursAgo = new Date(Date.now() - selectedOption.hours * 60 * 60 * 1000);
-            return this.historyData.filter(item => new Date(item.createdAt) >= hoursAgo);
+            // 直接返回 historyData，不再做前端过滤
+            // 因为后端已经按照选择的周期返回了正确的数据
+            // - "最近100条" (recent): 返回最近100条
+            // - "3h/6h/24h/1w": 返回对应时间范围内的所有数据
+            return this.historyData;
         },
         
         // 翻译文本
@@ -225,8 +218,51 @@ const app = createApp({
         }
     },
     methods: {
-        async fetchData(isInitial = false) {
-            if (this.paused && !isInitial) return;
+        // localStorage 缓存辅助方法
+        getHistoryCache(monitorId, cacheType) {
+            try {
+                const cacheKey = `history_cache_${monitorId}_${cacheType}`;
+                const cached = localStorage.getItem(cacheKey);
+                if (!cached) {
+                    console.log(`🔍 缓存miss: ${cacheKey}`);
+                    return null;
+                }
+                
+                const { data, timestamp } = JSON.parse(cached);
+                const now = Date.now();
+                
+                // 检查缓存是否过期
+                if (now - timestamp > this.historyCacheTTL) {
+                    console.log(`⏰ 缓存过期: ${cacheKey}`);
+                    localStorage.removeItem(cacheKey);
+                    return null;
+                }
+                
+                const age = Math.round((now - timestamp) / 1000);
+                console.log(`💾 缓存hit: ${cacheKey}, 记录数: ${data.length}, 年龄: ${age}秒`);
+                return { data, timestamp };
+            } catch (err) {
+                console.error('Failed to get cache:', err);
+                return null;
+            }
+        },
+        
+        setHistoryCache(monitorId, cacheType, data) {
+            try {
+                const cacheKey = `history_cache_${monitorId}_${cacheType}`;
+                const cacheData = {
+                    data: data,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                console.log(`💾 保存缓存: ${cacheKey}, 记录数: ${data.length}`);
+            } catch (err) {
+                console.error('Failed to set cache:', err);
+            }
+        },
+        
+        async fetchData(isInitial = false, forceReload = false) {
+            if (this.paused && !isInitial && !forceReload) return;
             
             try {
                 if (isInitial) {
@@ -242,71 +278,57 @@ const app = createApp({
 
                 // 根据当前选择的周期决定请求方式
                 let historyRes;
+                const cacheType = this.selectedPeriod === 'recent' ? 'limit_100' : this.selectedPeriod;
+                
+                // 尝试从缓存读取（初次加载或切换周期时，但不是强制重新加载）
+                if (!forceReload) {
+                    const cached = this.getHistoryCache(this.monitorId, cacheType);
+                    if (cached) {
+                        console.log(`✅ 使用缓存数据: ${cacheType}, 记录数: ${cached.data.length}`);
+                        this.historyData = cached.data;
+                        if (isInitial) {
+                            this.loading = false;
+                        }
+                        this.$nextTick(() => {
+                            this.renderChart();
+                        });
+                        return; // 使用缓存，直接返回
+                    }
+                }
+                
+                console.log(`🌐 从服务器获取数据: ${cacheType}`);
                 
                 if (this.selectedPeriod === 'recent') {
                     // "最近"模式: 获取最近100条,使用 limit 参数
-                    if (this.historyData.length > 0 && !isInitial) {
-                        // 增量更新: 获取所有最近100条,然后前端过滤新数据
-                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?limit=100`);
-                        
-                        if (historyRes.data.success) {
-                            const newData = historyRes.data.data;
-                            const lastItem = this.historyData[this.historyData.length - 1];
-                            const lastTime = new Date(lastItem.createdAt);
-                            
-                            // 只添加比最后一条记录更新的数据
-                            const incrementalData = newData.filter(item => 
-                                new Date(item.createdAt) > lastTime
-                            );
-                            
-                            if (incrementalData.length > 0) {
-                                // 追加新数据
-                                this.historyData = [...this.historyData, ...incrementalData].slice(-100);
-                                console.log(`增量更新: 添加了 ${incrementalData.length} 条新数据`);
-                            }
-                        }
-                    } else {
-                        // 初次加载: 获取最近100条
-                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?limit=100`);
-                        if (historyRes.data.success) {
-                            this.historyData = historyRes.data.data;
-                        }
+                    const url = `/api/monitors/${this.monitorId}/history?limit=100`;
+                    console.log(`📡 请求API: ${url}`);
+                    historyRes = await axios.get(url);
+                    if (historyRes.data.success) {
+                        this.historyData = historyRes.data.data;
+                        // 保存到缓存
+                        this.setHistoryCache(this.monitorId, 'limit_100', this.historyData);
+                        console.log(`✅ 获取最近100条数据: ${this.historyData.length} 条记录`);
                     }
                 } else {
                     // 其他时间周期模式(3h/6h/24h/1w): 使用 hours 参数
                     const selectedOption = this.periodOptions.find(opt => opt.value === this.selectedPeriod);
                     const hours = selectedOption ? selectedOption.hours : 24;
                     
-                    if (this.historyData.length > 0 && !isInitial) {
-                        // 增量更新
-                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?hours=${hours}`);
+                    // 获取指定时间范围的数据（完整替换，不做增量更新）
+                    const url = `/api/monitors/${this.monitorId}/history?hours=${hours}`;
+                    console.log(`📡 请求API: ${url}`);
+                    historyRes = await axios.get(url);
+                    if (historyRes.data.success) {
+                        this.historyData = historyRes.data.data;
+                        // 保存到缓存
+                        this.setHistoryCache(this.monitorId, this.selectedPeriod, this.historyData);
+                        console.log(`✅ 获取${this.selectedPeriod}数据: ${this.historyData.length} 条记录, hours=${hours}`);
                         
-                        if (historyRes.data.success) {
-                            const newData = historyRes.data.data;
-                            const lastItem = this.historyData[this.historyData.length - 1];
-                            const lastTime = new Date(lastItem.createdAt);
-                            
-                            // 只添加比最后一条记录更新的数据
-                            const incrementalData = newData.filter(item => 
-                                new Date(item.createdAt) > lastTime
-                            );
-                            
-                            if (incrementalData.length > 0) {
-                                // 追加新数据
-                                this.historyData = [...this.historyData, ...incrementalData];
-                                // 保持指定时间范围的数据
-                                const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
-                                this.historyData = this.historyData.filter(item => 
-                                    new Date(item.createdAt) >= cutoffTime
-                                );
-                                console.log(`增量更新: 添加了 ${incrementalData.length} 条新数据`);
-                            }
-                        }
-                    } else {
-                        // 初次加载: 获取指定时间范围的数据
-                        historyRes = await axios.get(`/api/monitors/${this.monitorId}/history?hours=${hours}`);
-                        if (historyRes.data.success) {
-                            this.historyData = historyRes.data.data;
+                        // 调试：显示时间范围
+                        if (this.historyData.length > 0) {
+                            const firstTime = new Date(this.historyData[0].createdAt).toLocaleString();
+                            const lastTime = new Date(this.historyData[this.historyData.length - 1].createdAt).toLocaleString();
+                            console.log(`📅 时间范围: ${firstTime} 到 ${lastTime}`);
                         }
                     }
                 }
@@ -329,24 +351,18 @@ const app = createApp({
             this.selectedPeriod = periodValue;
             this.showPeriodDropdown = false;
             
-            // 如果从"最近"切换到其他周期,或从其他周期切换到"最近",需要重新加载数据
-            const oldIsRecent = oldPeriod === 'recent';
-            const newIsRecent = periodValue === 'recent';
-            
-            if (oldIsRecent !== newIsRecent) {
-                // 切换了数据源模式,重新加载数据
-                this.fetchData(true); // true表示强制重新加载
-            } else {
-                // 同一数据源模式下切换,只需重新渲染
-                this.$nextTick(() => {
-                    this.renderChart();
-                });
+            // 检查是否切换了周期
+            if (oldPeriod !== periodValue) {
+                // 切换周期时，检查新周期的缓存
+                // isInitial=false, forceReload=false，这样会先检查缓存
+                this.fetchData(false, false);
             }
         },
         togglePeriodDropdown() {
             this.showPeriodDropdown = !this.showPeriodDropdown;
         },
         renderChart() {
+            console.log('🎨 开始渲染图表...');
             const chartEl = document.getElementById('main-chart');
             if (!chartEl) {
                 console.warn('图表容器不存在');
@@ -356,6 +372,7 @@ const app = createApp({
                 console.warn('没有历史数据');
                 return;
             }
+            console.log(`📊 渲染数据: ${this.historyData.length} 条记录`);
 
             // 销毁旧图表
             if (this.chart) {
@@ -393,34 +410,46 @@ const app = createApp({
                 });
             });
 
-            // 构建连续的响应时间数据（保持数据连续性）
-            let lastValidValue = null;
-            let firstValidValue = null;
-            
-            // 先找第一个有效值
-            for (let i = 0; i < data.length; i++) {
-                if (data[i].status === 1) {
-                    firstValidValue = data[i].responseTime;
-                    break;
+            // 构建响应时间数据
+            // 首先标记需要断开的位置（时间间隔过大的地方）
+            const gapIndices = [];  // 记录gap发生在哪些索引之间
+            for (let i = 1; i < data.length; i++) {
+                const prevTime = new Date(data[i - 1].createdAt);
+                const currentTime = new Date(data[i].createdAt);
+                const intervalMinutes = (currentTime - prevTime) / 1000 / 60;
+                
+                // 如果间隔超过10分钟，记录为gap
+                if (intervalMinutes > 10) {
+                    console.log(`⚠️ 检测到数据断点: ${data[i - 1].createdAt} 到 ${data[i].createdAt}, 间隔 ${Math.round(intervalMinutes)} 分钟`);
+                    gapIndices.push(i - 1);  // 记录gap前的索引
                 }
             }
             
-            lastValidValue = firstValidValue;
-            const responseTimes = data.map(item => {
+            // 构建响应时间数据：不插入额外的null，直接使用原数据
+            const responseTimes = data.map((item, index) => {
+                // 如果是gap前后的点，强制设为null以断开线条
+                if (gapIndices.includes(index) || gapIndices.includes(index - 1)) {
+                    return null;
+                }
+                // 正常在线状态显示响应时间
                 if (item.status === 1) {
-                    lastValidValue = item.responseTime;
                     return item.responseTime;
                 }
-                // 离线/重试：使用前一个有效值
-                return lastValidValue;
+                // 离线/重试状态用null（不显示线条）
+                return null;
             });
+            
+            // 使用原始数据，不插入额外的元素
+            const finalTimesForAxis = timesForAxis;
+            const finalTimesForTooltip = timesForTooltip;
+            const finalData = data;
 
             // 构建 markArea 数据 - 标记维护和离线时段
             const markAreas = [];
             let areaStart = null;
             let areaStatus = null;
             
-            data.forEach((item, index) => {
+            finalData.forEach((item, index) => {
                 if (item.status !== 1) {
                     // 离线或维护状态
                     if (areaStart === null) {
@@ -457,9 +486,18 @@ const app = createApp({
                 markAreas.push({
                     status: areaStatus,
                     start: areaStart,
-                    end: data.length - 1
+                    end: finalData.length - 1
                 });
             }
+            
+            // 添加数据gap区域标记（使用特殊status=99标识）
+            gapIndices.forEach(gapIndex => {
+                markAreas.push({
+                    status: 99,  // 特殊状态表示数据gap
+                    start: gapIndex,
+                    end: gapIndex + 1
+                });
+            });
             
             // 计算Y轴范围 - 使用平均值和标准差，避免偶发大延迟导致趋势图不清晰
             const validTimes = responseTimes.filter(t => t !== null);
@@ -486,21 +524,67 @@ const app = createApp({
                 maxTime = maxTime + margin;
             }
 
-            // 构建 markArea 配置（显示离线/重试背景）
+            // 构建 markArea 配置（显示离线/重试/gap背景）
+            // 使用时间轴时，需要基于时间戳而不是索引
             const markAreaData = markAreas.map(area => {
-                const color = area.status === 2
-                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色 - 重试中
-                    : 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
+                let color, label;
                 
-                // markArea 从 area.start 延伸到 area.end + 1，覆盖整个区域
-                return [
-                    { xAxis: area.start, itemStyle: { color: color } },
-                    { xAxis: area.end + 1 }  // +1 延伸到下一个刻度边界
+                if (area.status === 99) {
+                    // 数据gap - 使用灰色，添加文字标注
+                    color = 'rgba(156, 163, 175, 0.4)';  // 灰色，稍微深一点
+                    label = {
+                        show: true,
+                        position: 'inside',
+                        formatter: '数据缺失',
+                        color: '#374151',
+                        fontSize: 14,
+                        fontWeight: 'bold'
+                    };
+                } else if (area.status === 2) {
+                    color = 'rgba(245, 158, 11, 0.3)';  // 橙色 - 重试中
+                    label = undefined;
+                } else {
+                    color = 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
+                    label = undefined;
+                }
+                
+                // 获取起始和结束时间戳
+                const startTime = new Date(finalData[area.start].createdAt).getTime();
+                const endTime = area.end < finalData.length - 1 
+                    ? new Date(finalData[area.end + 1].createdAt).getTime()
+                    : new Date(finalData[area.end].createdAt).getTime();
+                
+                // markArea 使用时间戳
+                const areaConfig = [
+                    { xAxis: startTime, itemStyle: { color: color } },
+                    { xAxis: endTime }
                 ];
+                
+                // 如果有label，添加到第一个点
+                if (label) {
+                    areaConfig[0].label = label;
+                }
+                
+                return areaConfig;
             });
             
             // 获取主题颜色
             const themeColors = this.getThemeColors();
+            
+            // 构建时间轴数据：将数据转换为 [时间戳, 响应时间] 格式
+            const seriesData = data.map((item, index) => {
+                const timestamp = new Date(item.createdAt).getTime();
+                let value = null;
+                
+                // 如果是gap前后的点，设为null以断开线条
+                if (gapIndices.includes(index) || gapIndices.includes(index - 1)) {
+                    value = null;
+                } else if (item.status === 1) {
+                    value = item.responseTime;
+                }
+                
+                return [timestamp, value];
+            });
             
             const option = {
                 grid: {
@@ -510,19 +594,32 @@ const app = createApp({
                     top: '20px'
                 },
                 xAxis: {
-                    type: 'category',
-                    data: timesForAxis,  // x轴使用仅时间的数组
-                    boundaryGap: true,  // 数据点居中
+                    type: 'time',  // 使用时间轴，会按真实时间间隔分布数据点
                     axisLabel: {
-                        fontSize: window.innerWidth < 768 ? 10 : 12,  // 移动端字体稍小
+                        fontSize: window.innerWidth < 768 ? 10 : 12,
                         color: themeColors.textColor,
-                        rotate: 0,
-                        interval: Math.floor(timesForAxis.length / 4)  // 与主页一致，显示1/4的标签
+                        formatter: function(value) {
+                            const date = new Date(value);
+                            // 根据时间范围决定显示格式
+                            const dataTimeSpan = data[data.length - 1] ? 
+                                new Date(data[data.length - 1].createdAt).getTime() - new Date(data[0].createdAt).getTime() : 0;
+                            
+                            if (dataTimeSpan > 2 * 24 * 3600 * 1000) {
+                                // 超过2天，显示月-日 时:分
+                                return `${date.getMonth() + 1}-${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                            } else {
+                                // 2天内，只显示时:分
+                                return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                            }
+                        }
                     },
                     axisLine: {
                         lineStyle: { color: themeColors.lineColor }
                     },
                     axisTick: {
+                        show: false
+                    },
+                    splitLine: {
                         show: false
                     }
                 },
@@ -549,17 +646,6 @@ const app = createApp({
                         }
                     }
                 },
-                // visualMap: 控制趋势线在不同区域的颜色
-                visualMap: {
-                    show: false,
-                    dimension: 0,  // 基于 x 轴索引
-                    pieces: data.map((item, index) => ({
-                        gte: index,
-                        lt: index + 1,
-                        color: item.status === 1 ? '#10b981' : 'transparent'  // 正常=绿色，离线/重试=透明
-                    })),
-                    seriesIndex: 0  // 只应用于趋势线 series
-                },
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: {
@@ -569,9 +655,25 @@ const app = createApp({
                         }
                     },
                     formatter: (params) => {
+                        if (!params || params.length === 0) return '';
+                        
                         const dataIndex = params[0].dataIndex;
-                        const item = data[dataIndex];
-                        const time = timesForTooltip[dataIndex];  // 使用完整时间（包含年月日）
+                        const item = finalData[dataIndex];
+                        
+                        if (!item) return '';
+                        
+                        // 格式化时间
+                        const date = new Date(item.createdAt);
+                        const time = date.toLocaleString('zh-CN', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: false
+                        });
+                        
                         if (item.status === 1) {
                             return `<div style="text-align: left;">${time}<br/>${this.t.status}: <span style="color: #10b981;">${this.t.normal}</span><br/>${this.t.response}: ${item.responseTime}${this.t.ms}</div>`;
                         } else if (item.status === 2) {
@@ -584,17 +686,13 @@ const app = createApp({
                 series: [
                     {
                         type: 'line',
-                        data: responseTimes,
+                        data: seriesData,  // 使用 [timestamp, value] 格式的数据
                         smooth: true,
                         showSymbol: false,
+                        connectNulls: false,  // 不连接 null 值，显示为断点
                         lineStyle: {
-                            width: 2
-                            // 颜色由 visualMap 控制
-                        },
-                        markArea: {
-                            silent: false,  // 允许 tooltip 穿透
-                            data: markAreaData,
-                            z: 10  // 上层，覆盖趋势线
+                            width: 2,
+                            color: '#10b981'  // 绿色线条
                         },
                         z: 1  // 趋势线在底层
                     }
@@ -677,26 +775,49 @@ const app = createApp({
                 });
             });
 
-            // 构建连续的响应时间数据（保持数据连续性）
-            let lastValidValue = null;
-            let firstValidValue = null;
-            
-            // 先找第一个有效值
-            for (let i = 0; i < data.length; i++) {
-                if (data[i].status === 1) {
-                    firstValidValue = data[i].responseTime;
-                    break;
-                }
-            }
-            
-            lastValidValue = firstValidValue;
-            const responseTimes = data.map(item => {
+            // 构建响应时间数据（检测数据间隔，间隔过大时显示断点）
+            const responseTimes = data.map((item, index) => {
                 if (item.status === 1) {
-                    lastValidValue = item.responseTime;
+                    // 正常状态，显示响应时间
                     return item.responseTime;
                 }
-                // 离线/重试：使用前一个有效值
-                return lastValidValue;
+                
+                // 离线/重试状态，检查时间间隔
+                if (index > 0 && index < data.length - 1) {
+                    const prevTime = new Date(data[index - 1].createdAt);
+                    const currentTime = new Date(item.createdAt);
+                    const nextTime = new Date(data[index + 1].createdAt);
+                    
+                    // 计算与前后数据点的时间间隔（分钟）
+                    const intervalBefore = (currentTime - prevTime) / 1000 / 60;
+                    const intervalAfter = (nextTime - currentTime) / 1000 / 60;
+                    
+                    // 如果间隔超过 5 分钟，认为是数据缺失，显示为断点(null)
+                    // 否则使用前一个有效值保持连续性
+                    if (intervalBefore > 5 || intervalAfter > 5) {
+                        return null;
+                    }
+                }
+                
+                // 找最近的有效值
+                let nearestValue = null;
+                // 先向前查找
+                for (let i = index - 1; i >= 0; i--) {
+                    if (data[i].status === 1) {
+                        nearestValue = data[i].responseTime;
+                        break;
+                    }
+                }
+                // 如果前面没找到，向后查找
+                if (nearestValue === null) {
+                    for (let i = index + 1; i < data.length; i++) {
+                        if (data[i].status === 1) {
+                            nearestValue = data[i].responseTime;
+                            break;
+                        }
+                    }
+                }
+                return nearestValue;
             });
 
             // 构建 markArea 数据
@@ -805,6 +926,7 @@ const app = createApp({
                     data: responseTimes,
                     smooth: true,
                     showSymbol: false,
+                    connectNulls: false,  // 不连接 null 值，显示为断点
                     lineStyle: {
                         width: 2
                         // 颜色由 visualMap 控制
