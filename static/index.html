@@ -206,7 +206,7 @@
 
                                 <!-- 响应时间信息 - 点击可跳转 -->
                                 <div class="response-info" @click="goToDetail(monitor.id)" style="cursor: pointer;">
-                                    <span><span class="response-label">LAST:</span> <span class="response-value">{{ monitor.responseTime }} ms</span></span>
+                                    <span><span class="response-label">LAST:</span> <span class="response-value">{{ monitor.responseTime != null ? monitor.responseTime + ' ms' : '-' }}</span></span>
                                     <span><span class="response-label">AVG:</span> <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span></span>
                                     <span><span class="response-label">MAX:</span> <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span></span>
                                 </div>
@@ -255,6 +255,6 @@
         </div>
     </div>
 
-    <script src="/js/app-v2.js?v=20251019-compact"></script>
+    <script src="/js/app-v2.js?v=20251115-last-response"></script>
 </body>
 </html>

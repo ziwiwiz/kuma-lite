@@ -348,6 +348,11 @@ const app = createApp({
                 if (cached) {
                     // 使用缓存数据
                     monitor.statusHistory = cached.data.slice(-100);
+                    // 获取最后一次响应时间
+                    if (cached.data.length > 0) {
+                        const lastData = cached.data[cached.data.length - 1];
+                        monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
+                    }
                     // 计算平均响应时间
                     const validResponses = cached.data.filter(item => item.status === 1);
                     if (validResponses.length > 0) {
@@ -382,6 +387,9 @@ const app = createApp({
                                 this.setHistoryCache(monitor.id, result.heartbeats);
                                 
                                 monitor.statusHistory = result.heartbeats.slice(-100);
+                                // 获取最后一次响应时间
+                                const lastData = result.heartbeats[result.heartbeats.length - 1];
+                                monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
                                 // 计算平均响应时间
                                 const validResponses = result.heartbeats.filter(item => item.status === 1);
                                 if (validResponses.length > 0) {
@@ -410,6 +418,9 @@ const app = createApp({
                             if (res.data.success && res.data.data.length > 0) {
                                 this.setHistoryCache(monitorId, res.data.data);
                                 monitor.statusHistory = res.data.data.slice(-100);
+                                // 获取最后一次响应时间
+                                const lastData = res.data.data[res.data.data.length - 1];
+                                monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
                                 const validResponses = res.data.data.filter(item => item.status === 1);
                                 if (validResponses.length > 0) {
                                     const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);

@@ -425,17 +425,17 @@ const app = createApp({
                 }
             }
             
-            // 构建响应时间数据：不插入额外的null，直接使用原数据
+            // 构建响应时间数据（已弃用，保留用于兼容性）
             const responseTimes = data.map((item, index) => {
-                // 如果是gap前后的点，强制设为null以断开线条
                 if (gapIndices.includes(index) || gapIndices.includes(index - 1)) {
                     return null;
                 }
-                // 正常在线状态显示响应时间
                 if (item.status === 1) {
                     return item.responseTime;
                 }
-                // 离线/重试状态用null（不显示线条）
+                if (index > 0 && data[index - 1].status === 1) {
+                    return data[index - 1].responseTime;
+                }
                 return null;
             });
             
@@ -461,7 +461,7 @@ const app = createApp({
                         markAreas.push({
                             status: areaStatus,
                             start: areaStart,
-                            end: index - 1
+                            end: index  // 延伸到当前点（状态变化点）
                         });
                         areaStart = index;
                         areaStatus = item.status;
@@ -469,11 +469,11 @@ const app = createApp({
                 } else {
                     // 正常状态
                     if (areaStart !== null) {
-                        // 结束之前的区域
+                        // 结束之前的区域，延伸到当前正常状态点
                         markAreas.push({
                             status: areaStatus,
                             start: areaStart,
-                            end: index - 1
+                            end: index  // 延伸到当前点（正常状态点）
                         });
                         areaStart = null;
                         areaStatus = null;
@@ -490,14 +490,8 @@ const app = createApp({
                 });
             }
             
-            // 添加数据gap区域标记（使用特殊status=99标识）
-            gapIndices.forEach(gapIndex => {
-                markAreas.push({
-                    status: 99,  // 特殊状态表示数据gap
-                    start: gapIndex,
-                    end: gapIndex + 1
-                });
-            });
+            // 数据gap不需要添加到markAreas，让它保持空白即可
+            // gapIndices 已经在 responseTimes 中设置为 null，会自动显示为断点
             
             // 计算Y轴范围 - 使用平均值和标准差，避免偶发大延迟导致趋势图不清晰
             const validTimes = responseTimes.filter(t => t !== null);
@@ -524,55 +518,52 @@ const app = createApp({
                 maxTime = maxTime + margin;
             }
 
-            // 构建 markArea 配置（显示离线/重试/gap背景）
+            // 构建 markArea 配置（显示离线/重试背景，数据gap保持空白）
             // 使用时间轴时，需要基于时间戳而不是索引
             const markAreaData = markAreas.map(area => {
-                let color, label;
-                
-                if (area.status === 99) {
-                    // 数据gap - 使用灰色，添加文字标注
-                    color = 'rgba(156, 163, 175, 0.4)';  // 灰色，稍微深一点
-                    label = {
-                        show: true,
-                        position: 'inside',
-                        formatter: '数据缺失',
-                        color: '#374151',
-                        fontSize: 14,
-                        fontWeight: 'bold'
-                    };
-                } else if (area.status === 2) {
-                    color = 'rgba(245, 158, 11, 0.3)';  // 橙色 - 重试中
-                    label = undefined;
-                } else {
-                    color = 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
-                    label = undefined;
-                }
+                // 只为重试中和离线状态添加背景色
+                const color = area.status === 2
+                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色 - 重试中
+                    : 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
                 
                 // 获取起始和结束时间戳
+                // 起始时间：异常状态开始点的时间戳
                 const startTime = new Date(finalData[area.start].createdAt).getTime();
-                const endTime = area.end < finalData.length - 1 
-                    ? new Date(finalData[area.end + 1].createdAt).getTime()
-                    : new Date(finalData[area.end].createdAt).getTime();
+                
+                // 结束时间：area.end 现在指向状态变化点（可能是正常点或另一个异常点）
+                // 我们需要延伸到这个点的时间戳
+                let endTime;
+                if (area.end < finalData.length) {
+                    // 延伸到状态变化点的时间戳
+                    endTime = new Date(finalData[area.end].createdAt).getTime();
+                } else {
+                    // 如果 area.end 超出范围（最后一个点），延伸一个监控间隔
+                    if (finalData.length >= 2) {
+                        const interval = new Date(finalData[finalData.length - 1].createdAt).getTime() - 
+                                        new Date(finalData[finalData.length - 2].createdAt).getTime();
+                        endTime = new Date(finalData[area.start].createdAt).getTime() + interval;
+                    } else {
+                        // 如果只有一个点，延伸60秒
+                        endTime = new Date(finalData[area.start].createdAt).getTime() + 60000;
+                    }
+                }
                 
                 // markArea 使用时间戳
-                const areaConfig = [
+                return [
                     { xAxis: startTime, itemStyle: { color: color } },
                     { xAxis: endTime }
                 ];
-                
-                // 如果有label，添加到第一个点
-                if (label) {
-                    areaConfig[0].label = label;
-                }
-                
-                return areaConfig;
             });
             
             // 获取主题颜色
             const themeColors = this.getThemeColors();
+            const isDark = document.body.classList.contains('dark-mode');
             
             // 构建时间轴数据：将数据转换为 [时间戳, 响应时间] 格式
-            const seriesData = data.map((item, index) => {
+            // 策略：异常区域的第一个点用于平滑过渡，第二个点开始插入null断开连接
+            const seriesData = [];
+            
+            data.forEach((item, index) => {
                 const timestamp = new Date(item.createdAt).getTime();
                 let value = null;
                 
@@ -580,17 +571,55 @@ const app = createApp({
                 if (gapIndices.includes(index) || gapIndices.includes(index - 1)) {
                     value = null;
                 } else if (item.status === 1) {
-                    value = item.responseTime;
+                    // 正常状态点：检查是否在某个异常 markArea 区域内
+                    let isInsideMarkArea = false;
+                    for (const area of markAreas) {
+                        // 如果这个正常点的索引在某个异常区域范围内，不显示
+                        if (index > area.start && index < area.end) {
+                            isInsideMarkArea = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!isInsideMarkArea) {
+                        // 不在异常区域内，显示响应时间
+                        value = item.responseTime;
+                    }
+                    // 在异常区域内的正常点，保持 null，不显示
+                } else if (index > 0 && data[index - 1].status === 1) {
+                    // 从正常切换到异常的第一个点，使用前一个正常点的响应时间，形成过渡
+                    value = data[index - 1].responseTime;
                 }
+                // 其他异常状态点保持 null
                 
-                return [timestamp, value];
+                seriesData.push([timestamp, value]);
+                
+                // 关键：如果当前点是异常状态的第一个点（用于过渡），在其后立即插入一个null点来断开
+                if (value !== null && item.status !== 1 && index > 0 && data[index - 1].status === 1) {
+                    // 插入一个时间稍微靠后的null点，断开与后续正常点的连接
+                    // 使用当前时间戳加1毫秒，确保在时间轴上的位置正确
+                    seriesData.push([timestamp + 1, null]);
+                }
             });
+            
+            // 计算最小显示范围：确保至少显示50个数据点
+            // 计算数据点的平均时间间隔
+            let minZoomSpan = 5 * 60 * 1000; // 默认5分钟
+            if (data.length >= 2) {
+                const totalTimeSpan = new Date(data[data.length - 1].createdAt).getTime() - 
+                                     new Date(data[0].createdAt).getTime();
+                const avgInterval = totalTimeSpan / (data.length - 1);
+                // 至少显示50个数据点的时间范围
+                const minSpanFor50Points = avgInterval * 50;
+                // 取较大值，确保至少5分钟或50个数据点
+                minZoomSpan = Math.max(5 * 60 * 1000, minSpanFor50Points);
+            }
             
             const option = {
                 grid: {
                     left: '50px',
                     right: '30px',
-                    bottom: window.innerWidth < 768 ? '60px' : '45px',  // 移动端需要更多底部空间
+                    bottom: window.innerWidth < 768 ? '100px' : '85px',  // 增加底部空间以容纳缩放滑块
                     top: '20px'
                 },
                 xAxis: {
@@ -646,6 +675,57 @@ const app = createApp({
                         }
                     }
                 },
+                // 数据缩放组件配置
+                dataZoom: [
+                    {
+                        type: 'inside',  // 内置型数据区域缩放组件（支持鼠标滚轮缩放、触摸板缩放）
+                        start: 0,        // 默认显示全部数据
+                        end: 100,
+                        zoomOnMouseWheel: true,     // 开启鼠标滚轮缩放
+                        moveOnMouseMove: true,      // 开启鼠标拖拽平移
+                        moveOnMouseWheel: false,    // 关闭鼠标滚轮平移（避免与缩放冲突）
+                        preventDefaultMouseMove: true,
+                        minValueSpan: minZoomSpan,  // 动态计算：至少5分钟或50个数据点
+                        maxValueSpan: null  // 最大显示范围：不限制（显示全部）
+                    },
+                    {
+                        type: 'slider',  // 滑动条型数据区域缩放组件
+                        start: 0,
+                        end: 100,
+                        height: 20,
+                        bottom: window.innerWidth < 768 ? 10 : 10,
+                        showDetail: false,  // 不显示手柄详细信息
+                        handleSize: 0,  // 隐藏手柄
+                        handleStyle: {
+                            opacity: 0  // 完全透明
+                        },
+                        textStyle: {
+                            color: themeColors.textColor,
+                            fontSize: 10
+                        },
+                        borderColor: themeColors.lineColor,
+                        fillerColor: isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                        showDetail: true,
+                        showDataShadow: true,
+                        dataBackground: {
+                            lineStyle: {
+                                color: isDark ? 'rgba(76, 175, 80, 0.3)' : 'rgba(16, 185, 129, 0.3)'
+                            },
+                            areaStyle: {
+                                color: isDark ? 'rgba(76, 175, 80, 0.1)' : 'rgba(16, 185, 129, 0.1)'
+                            }
+                        },
+                        selectedDataBackground: {
+                            lineStyle: {
+                                color: isDark ? 'rgba(76, 175, 80, 0.5)' : 'rgba(16, 185, 129, 0.5)'
+                            },
+                            areaStyle: {
+                                color: isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(16, 185, 129, 0.2)'
+                            }
+                        }
+                    }
+                ],
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: {
@@ -693,6 +773,12 @@ const app = createApp({
                         lineStyle: {
                             width: 2,
                             color: '#10b981'  // 绿色线条
+                        },
+                        // 添加 markArea 来显示重试中和离线的背景色
+                        markArea: {
+                            silent: false,  // 允许 tooltip 穿透
+                            data: markAreaData,
+                            z: 10  // 上层，覆盖趋势线
                         },
                         z: 1  // 趋势线在底层
                     }
