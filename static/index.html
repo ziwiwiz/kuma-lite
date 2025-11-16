@@ -13,10 +13,11 @@
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kuma Lite - 服务监控</title>
-    <link rel="stylesheet" href="/css/style-v2.css?v=20251019-compact">
+    <link rel="stylesheet" href="/css/style-v2.css?v=20251117-ui-optimize">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/js/logger.js"></script>
 </head>
 <body>
     <div id="app">
@@ -28,17 +29,46 @@
 
         <!-- 主内容 -->
         <div v-else>
-            <!-- 顶部状态横幅 -->
-            <div class="top-banner" :class="getBannerClass()">
-                <div class="banner-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <path d="M20 6L9 17l-5-5"/>
-                    </svg>
-                </div>
-                <div class="banner-text">
-                    <span v-if="stats && stats.downMonitors === 0">{{ t.allServices }} {{ t.normal }}</span>
-                    <span v-else-if="stats">{{ t.someServicesDown }}</span>
-                    <span v-if="stats"> ({{ stats.upMonitors }}/{{ stats.totalMonitors }})</span>
+            <!-- 系统状态栏 -->
+            <div class="system-status-bar" :class="getSystemStatusClass()">
+                <div class="status-main">
+                    <div class="status-icon">
+                        <svg v-if="systemStatus === 'operational'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        <svg v-else-if="systemStatus === 'warning'" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L1 21h22L12 2zm0 3.5l8.5 15h-17L12 5.5zM11 10v5h2v-5h-2zm0 6v2h2v-2h-2z"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path fill="white" d="M15 9l-6 6M9 9l6 6" stroke="white" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="status-text">
+                        <div class="status-title">
+                            <span v-if="systemStatus === 'operational'">{{ t.allSystemsOperational || '所有系统正常运行' }}</span>
+                            <span v-else-if="systemStatus === 'warning'">{{ t.partialOutage || '部分服务异常' }}</span>
+                            <span v-else>{{ t.majorOutage || '系统故障' }}</span>
+                        </div>
+                        <div class="status-stats" v-if="stats">
+                            <span class="stat-item stat-online" v-if="stats.upMonitors > 0">
+                                <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                                {{ stats.upMonitors }} {{ t.online || '在线' }}
+                            </span>
+                            <span class="stat-item stat-retry" v-if="stats.retryMonitors > 0">
+                                <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                                {{ stats.retryMonitors }} {{ t.retry || '重试中' }}
+                            </span>
+                            <span class="stat-item stat-maintenance" v-if="stats.maintenanceMonitors > 0">
+                                <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                                {{ stats.maintenanceMonitors }} {{ t.underMaintenance || '维护中' }}
+                            </span>
+                            <span class="stat-item stat-offline" v-if="stats.downMonitors > 0">
+                                <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                                {{ stats.downMonitors }} {{ t.offline || '离线' }}
+                            </span>
+                        </div>
+                    </div>
                 </div>
                 <div class="banner-controls">
                     <!-- 主题切换下拉菜单 -->
@@ -156,14 +186,117 @@
 
             <!-- 控制栏 -->
             <div class="control-bar">
-                <button class="btn-pause" @click="togglePause">
-                    <span v-if="!paused">{{ t.pause }}</span>
-                    <span v-else>{{ t.resume }}</span>
-                </button>
-                <button class="btn-refresh" @click="fetchData" :disabled="loading">{{ t.refresh }}</button>
-                <span class="refresh-info">
-                    {{ t.lastUpdateInfo.replace('{time}', lastUpdate).replace('{countdown}', countdown) }}
-                </span>
+                <div class="refresh-status">
+                    <div class="refresh-info">
+                        <span class="refresh-time">{{ t.lastUpdate }}: {{ lastUpdate }}</span>
+                        <span class="refresh-countdown" v-if="!paused">{{ t.autoRefresh }} {{ countdown }}s</span>
+                        <span class="refresh-paused" v-else>{{ t.paused }}</span>
+                    </div>
+                    <div class="progress-bar" v-if="!paused">
+                        <div class="progress-fill" :style="{ width: progressPercent + '%', background: progressColor }"></div>
+                    </div>
+                </div>
+                <div class="control-buttons">
+                    <button class="btn-pause" @click="togglePause">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect v-if="!paused" x="6" y="4" width="4" height="16" fill="currentColor"/>
+                            <rect v-if="!paused" x="14" y="4" width="4" height="16" fill="currentColor"/>
+                            <polygon v-if="paused" points="8,5 19,12 8,19" fill="currentColor"/>
+                        </svg>
+                        <span v-if="!paused">{{ t.pause }}</span>
+                        <span v-else>{{ t.resume }}</span>
+                    </button>
+                    <button class="btn-refresh" @click="fetchData(true)" :disabled="loading">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                        </svg>
+                        <span>{{ t.refresh }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 事件公告（高优先级） -->
+            <div v-if="activeIncident && config?.features?.enable_incidents" 
+                 class="incident-alert" 
+                 :class="['incident-' + (activeIncident.style || 'info'), { 'collapsed': !incidentExpanded }]">
+                <div class="incident-header" @click="incidentExpanded = !incidentExpanded" style="cursor: pointer;">
+                    <div class="incident-icon">
+                        <svg v-if="activeIncident.style === 'danger'" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L1 21h22L12 2zm0 3.5l8.5 15h-17L12 5.5zM11 10v5h2v-5h-2zm0 6v2h2v-2h-2z"/>
+                        </svg>
+                        <svg v-else-if="activeIncident.style === 'warning'" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path fill="white" d="M11 7h2v6h-2zm0 8h2v2h-2z"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path fill="white" d="M11 7h2v2h-2zm0 4h2v6h-2z"/>
+                        </svg>
+                    </div>
+                    <div class="incident-title">{{ activeIncident.title }}</div>
+                    <div class="incident-date">{{ formatDate(activeIncident.created_at) }}</div>
+                    <button class="collapse-toggle" @click.stop="incidentExpanded = !incidentExpanded">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+                             :style="{ transform: incidentExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="incident-content" v-show="incidentExpanded">
+                    <div v-html="renderMarkdown(activeIncident.content)"></div>
+                    <div class="content-timestamp" v-if="activeIncident.lastUpdatedDate || activeIncident.updatedAt">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        更新于 {{ formatDate(activeIncident.lastUpdatedDate || activeIncident.updatedAt) }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 维护公告 -->
+            <div v-if="currentMaintenances.length > 0 && config?.features?.enable_maintenance" 
+                 class="maintenance-alerts">
+                <div v-for="(maintenance, index) in currentMaintenances" 
+                     :key="maintenance.id" 
+                     class="maintenance-alert"
+                     :class="[{'maintenance-active': maintenance.status === 'under-maintenance'}, { 'collapsed': !maintenanceExpanded[index] }]">
+                    <div class="maintenance-header" @click="toggleMaintenance(index)" style="cursor: pointer;">
+                        <div class="maintenance-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                            </svg>
+                        </div>
+                        <div class="maintenance-title">{{ maintenance.title }}</div>
+                        <div class="maintenance-status">
+                            <span v-if="maintenance.status === 'scheduled'">计划中</span>
+                            <span v-else-if="maintenance.status === 'under-maintenance'">进行中</span>
+                            <span v-else-if="maintenance.status === 'ended'">已完成</span>
+                        </div>
+                        <button class="collapse-toggle" @click.stop="toggleMaintenance(index)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+                                 :style="{ transform: maintenanceExpanded[index] ? 'rotate(180deg)' : 'rotate(0deg)' }">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div v-show="maintenanceExpanded[index]">
+                        <div class="maintenance-time">
+                            <span>{{ formatDateRange(maintenance.start_date, maintenance.end_date) }}</span>
+                        </div>
+                        <div v-if="maintenance.description" 
+                             class="maintenance-description" 
+                             v-html="renderMarkdown(maintenance.description)"></div>
+                        <div class="content-timestamp" v-if="maintenance.updated_at">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            更新于 {{ formatDate(maintenance.updated_at) }}
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 监控分组 -->
@@ -172,43 +305,86 @@
                     <h2 class="group-title">{{ group.name }}</h2>
                     
                     <div class="monitor-cards">
-                        <div v-for="monitor in group.monitors" :key="monitor.id" class="monitor-card">
+                        <div v-for="monitor in group.monitors" :key="monitor.id" class="monitor-card" :data-monitor-id="monitor.id">
                             <div class="card-main">
                                 <!-- 卡片头部 - 点击可跳转 -->
                                 <div class="card-header" @click="goToDetail(monitor.id)" style="cursor: pointer;">
                                     <div class="monitor-title">
-                                        <span class="status-icon" :class="getStatusIconClass(monitor.status)">
-                                            <svg v-if="monitor.status === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                        <span class="status-icon" :class="getStatusIconClass(monitor.status, monitor.responseTime)">
+                                            <svg v-if="monitor.status === 1 && monitor.responseTime != null" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                                 <path d="M20 6L9 17l-5-5"/>
                                             </svg>
-                                            <svg v-else-if="monitor.status === 2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <svg v-else-if="monitor.status === 1 && monitor.responseTime == null" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <circle cx="12" cy="12" r="10"/>
                                                 <line x1="12" y1="8" x2="12" y2="12"/>
                                                 <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                            </svg>
+                                            <svg v-else-if="monitor.status === 2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="8"/>
+                                                <path d="M12 6v6l4 2"/>
                                             </svg>
                                             <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                                 <line x1="18" y1="6" x2="6" y2="18"/>
                                                 <line x1="6" y1="6" x2="18" y2="18"/>
                                             </svg>
                                         </span>
+                                        <span class="monitor-type-icon" v-if="monitor.type" :title="getMonitorTypeLabel(monitor.type)">
+                                            <svg v-if="monitor.type === 'http' || monitor.type === 'https'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M2 12h20"/>
+                                            </svg>
+                                            <svg v-else-if="monitor.type === 'tcp' || monitor.type === 'port'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                                                <line x1="9" y1="9" x2="15" y2="9"/>
+                                                <line x1="9" y1="13" x2="15" y2="13"/>
+                                                <line x1="9" y1="17" x2="15" y2="17"/>
+                                            </svg>
+                                            <svg v-else-if="monitor.type === 'ping'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="2"/>
+                                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                                            </svg>
+                                            <svg v-else-if="monitor.type === 'dns'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                            </svg>
+                                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                            </svg>
+                                        </span>
                                         <span class="monitor-name">{{ monitor.name }}</span>
+                                        <span class="monitor-method" v-if="monitor.method" :class="'method-' + monitor.method.toLowerCase()">
+                                            {{ monitor.method }}
+                                        </span>
+                                    </div>
+                                    <div class="monitor-meta" v-if="monitor.tags && monitor.tags.length > 0">
+                                        <span class="monitor-tag" v-for="tag in monitor.tags" :key="tag">{{ tag }}</span>
                                     </div>
                                     <div class="uptime-display">
                                         <div class="uptime-circle" :style="getUptimeCircleStyle(monitor.uptime)">
                                             <svg viewBox="0 0 36 36">
                                                 <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                                                <path class="circle-progress" :stroke-dasharray="getCircleDasharray(monitor.uptime)" :stroke="getUptimeColor(monitor.uptime)" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                                <path class="circle-progress" :stroke-dasharray="getCircleDasharray(monitor.uptime)" :stroke="getUptimeColor(monitor)" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                                             </svg>
                                         </div>
                                         <span class="uptime-percent">{{ formatUptime(monitor.uptime) }}</span>
                                     </div>
                                 </div>
 
-                                <!-- 响应时间信息 - 点击可跳转 -->
+                                <!-- 响应时间信息和状态图例 - 点击可跳转 -->
                                 <div class="response-info" @click="goToDetail(monitor.id)" style="cursor: pointer;">
-                                    <span><span class="response-label">LAST:</span> <span class="response-value">{{ monitor.responseTime != null ? monitor.responseTime + ' ms' : '-' }}</span></span>
-                                    <span><span class="response-label">AVG:</span> <span class="response-value">{{ getAvgResponseTime(monitor) }} ms</span></span>
-                                    <span><span class="response-label">MAX:</span> <span class="response-value">{{ getMaxResponseTime(monitor) }} ms</span></span>
+                                    <div class="delay-metrics">
+                                        <span><span class="response-label">LAST:</span> <span class="response-value">{{ monitor.responseTime != null ? monitor.responseTime + ' ms' : '-' }}</span></span>
+                                        <span><span class="response-label">AVG:</span> <span class="response-value">{{ getAvgResponseTime(monitor) != null ? getAvgResponseTime(monitor) + ' ms' : '-' }}</span></span>
+                                        <span><span class="response-label">MAX:</span> <span class="response-value">{{ getMaxResponseTime(monitor) != null ? getMaxResponseTime(monitor) + ' ms' : '-' }}</span></span>
+                                    </div>
+                                    <div class="status-labels">
+                                        <span class="legend-item"><span class="legend-dot legend-online"></span>{{ t.online || '在线' }}</span>
+                                        <span class="legend-item"><span class="legend-dot legend-retry"></span>{{ t.retry || '重试中' }}</span>
+                                        <span class="legend-item"><span class="legend-dot legend-maintenance"></span>{{ t.maintenance || '维护中' }}</span>
+                                        <span class="legend-item"><span class="legend-dot legend-offline"></span>{{ t.offline || '离线' }}</span>
+                                    </div>
                                 </div>
 
                                 <!-- 状态条 - 点击可跳转 -->
@@ -255,6 +431,6 @@
         </div>
     </div>
 
-    <script src="/js/app-v2.js?v=20251115-last-response"></script>
+    <script src="/js/app-v2.js?v=20251117-ui-optimize"></script>
 </body>
 </html>

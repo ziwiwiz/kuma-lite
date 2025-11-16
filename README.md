@@ -5,12 +5,11 @@
 ## 📚 文档导航
 
 - [快速开始](./QUICKSTART.md) - 5 分钟快速部署
-- [架构文档](./ARCHITECTURE.md) - 完整的技术架构和实现细节
-- [文件清单](./FILE_MANIFEST.md) - 项目文件说明和用途
 - [更新日志](./CHANGELOG.md) - 版本更新记录
-- [开发指南](./DEV_GUIDE.md) - 开发环境搭建
 - [API 文档](./docs/API.md) - API 接口规范
 - [部署指南](./docs/DEPLOYMENT.md) - 生产环境部署
+- [日志配置](./docs/LOG_LEVELS.md) - 日志级别配置说明
+- [问题排查](./docs/TROUBLESHOOTING.md) - 常见问题解决
 
 ---
 
@@ -20,25 +19,34 @@ Kuma-Lite 是一个第三方 Uptime Kuma 监控仪表盘项目，旨在解决 Up
 
 本项目参考开源项目 [kuma-mieru](https://github.com/Alice39s/kuma-mieru) 的设计理念，在其基础上进行了增强和优化。
 
-## 核心特性
+## ✨ 核心特性
 
-- ✅ **直观的监控展示**: 清晰的状态卡片和可视化图表
+### 界面与交互
+- 🎨 **现代化界面**: 清晰的状态卡片和可视化图表
+- 📱 **响应式设计**: 完美适配桌面端和移动端
+- 🌓 **主题切换**: 亮色/暗色/自动跟随系统
+- 🌍 **多语言支持**: 中文/English
+
+### 数据展示
 - 📊 **延迟图表**: 实时展示服务响应时间趋势
-- 🔍 **交互式缩放**: 
-  - 鼠标滚轮缩放、拖拽平移
-  - 底部滑动条控制
-  - 智能缩放限制（至少显示50个数据点）
-  - 平滑过渡到异常状态区域
-- 🎨 **状态可视化**: 
-  - 离线/重试状态背景色标注
-  - 数据缺失自动断点显示
-  - 暗色模式完美适配
-- � **后端缓存**: 数据缓存和整理，提升访问速度
-- 💾 **持久化存储**: 历史数据持久化，支持长期数据分析
+- 📈 **历史记录**: 支持查看最近 25/50/100 次记录
+- 🎯 **状态可视化**: 
+  - 在线/离线/重试/维护状态区分
+  - 状态条颜色标注
+  - 可用率环形进度展示
+
+### 性能与架构
+- ⚡ **后端缓存**: 数据缓存和整理，提升访问速度
+- 💾 **持久化存储**: SQLite 历史数据持久化
 - 🐳 **Docker 部署**: 单容器部署，开箱即用
-- 🔒 **无跨域问题**: 后端直接数据获取，前端直接使用
-- 🎯 **一体化架构**: 后端提供 API 和静态页面服务，部署简单
-- � **主题切换**: 自动跟随系统主题或手动切换亮色/暗色模式
+- 🔒 **无跨域问题**: 后端直接数据获取
+- 📝 **分级日志**: DEBUG/INFO/WARN/ERROR/FATAL 五级日志控制
+
+### 高级功能
+- 🔍 **搜索过滤**: 快速查找监控项或分组
+- 📦 **精简模式**: 卡片/列表视图切换
+- ⏸️ **自动刷新**: 可暂停/继续自动刷新
+- 🔧 **维护模式**: 支持维护公告展示
 
 ## 技术栈
 
@@ -59,51 +67,60 @@ Kuma-Lite 是一个第三方 Uptime Kuma 监控仪表盘项目，旨在解决 Up
 - Docker - 容器化部署
 - 单容器包含所有服务
 
-## 项目架构
+## 📁 项目架构
 
 ```
 kuma-lite/
-├── backend/                # 后端 Go 项目
-│   ├── api/                # API 路由处理
-│   │   ├── handlers.go     # HTTP 处理器
-│   │   └── router.go       # 路由配置
-│   ├── cache/              # 缓存逻辑
-│   │   └── cache.go        # 缓存管理器
-│   ├── database/           # 数据库操作
-│   │   ├── db.go           # 数据库连接
-│   │   └── repository.go   # 数据访问层
-│   ├── fetcher/            # 数据获取
-│   │   ├── kuma.go         # Uptime Kuma 数据抓取
-│   │   └── parser.go       # 数据解析逻辑
-│   ├── models/             # 数据模型
-│   │   └── monitor.go      # 监控项模型
-│   ├── config/             # 配置管理
-│   │   └── config.go       # 配置加载
-│   ├── scheduler/          # 定时任务
-│   │   └── scheduler.go    # 数据定期获取
-│   └── main.go             # 主入口
-├── static/                 # 前端静态资源
-│   ├── index.html          # 主页面
+├── backend/                      # 后端 Go 项目
+│   ├── api/                      # API 路由处理
+│   │   ├── handlers.go           # 监控数据 API 处理器
+│   │   ├── maintenance_handlers.go  # 维护公告 API 处理器
+│   │   └── router.go             # 路由配置
+│   ├── cache/                    # 缓存逻辑
+│   │   └── cache.go              # 内存缓存管理
+│   ├── config/                   # 配置管理
+│   │   └── config.go             # 环境变量加载
+│   ├── database/                 # 数据库操作
+│   │   ├── db.go                 # SQLite 连接
+│   │   ├── migration.go          # 数据库迁移
+│   │   ├── repository.go         # 监控数据访问层
+│   │   └── maintenance_repository.go  # 维护数据访问层
+│   ├── fetcher/                  # 数据获取
+│   │   └── kuma.go               # Uptime Kuma 数据抓取
+│   ├── logger/                   # 日志系统
+│   │   └── logger.go             # 分级日志实现
+│   ├── models/                   # 数据模型
+│   │   ├── monitor.go            # 监控项模型
+│   │   └── maintenance.go        # 维护公告模型
+│   ├── scheduler/                # 定时任务
+│   │   └── scheduler.go          # 数据定期获取和清理
+│   └── main.go                   # 主入口
+├── static/                       # 前端静态资源
+│   ├── index.html                # 主页面
+│   ├── detail.html               # 详情页面
 │   ├── css/
-│   │   └── style.css       # 自定义样式
+│   │   ├── style-v2.css          # 主样式（含响应式）
+│   │   └── style-detail.css      # 详情页样式
 │   └── js/
-│       ├── app.js          # Vue 主应用
-│       ├── api.js          # API 调用封装
-│       ├── components.js   # Vue 组件定义
-│       └── utils.js        # 工具函数
-├── data/                   # 数据存储目录
-│   └── kuma-lite.db        # SQLite 数据库（运行时生成）
-├── docs/                   # 项目文档
-│   ├── REQUIREMENTS.md     # 需求文档
-│   ├── DESIGN.md           # 设计文档
-│   ├── API.md              # API 文档
-│   └── DEPLOYMENT.md       # 部署文档
-├── Dockerfile              # Docker 镜像构建
-├── docker-compose.yml      # Docker Compose 配置
-├── .env.example            # 环境变量示例
-├── go.mod                  # Go 依赖管理
-├── go.sum
-└── README.md               # 项目说明
+│       ├── app-v2.js             # Vue 主应用（含 i18n）
+│       ├── app-detail.js         # 详情页应用
+│       └── logger.js             # 前端日志系统
+├── data/                         # 数据存储目录
+│   └── kuma-lite.db              # SQLite 数据库（运行时生成）
+├── docs/                         # 项目文档
+│   ├── API.md                    # API 文档
+│   ├── DEPLOYMENT.md             # 部署文档
+│   ├── REQUIREMENTS.md           # 需求文档
+│   ├── TROUBLESHOOTING.md        # 问题排查
+│   ├── LOG_LEVELS.md             # 日志配置
+│   └── FRONTEND_LOGGING.md       # 前端日志说明
+├── Dockerfile                    # Docker 镜像构建
+├── docker-compose.yml            # Docker Compose 配置
+├── .env.example                  # 环境变量示例
+├── go.mod & go.sum               # Go 依赖管理
+├── CHANGELOG.md                  # 更新日志
+├── QUICKSTART.md                 # 快速开始
+└── README.md                     # 项目说明
 ```
 
 ## 快速开始
@@ -169,28 +186,34 @@ go run backend/main.go
 
 访问 `http://localhost:8080` 查看应用。
 
-## 配置说明
+## ⚙️ 配置说明
 
 ### 环境变量
 
 ```env
-# Uptime Kuma 配置
+# ===== Uptime Kuma 配置 =====
 KUMA_API_URL=https://your-kuma-instance.com
 KUMA_STATUS_PAGE_SLUG=your-status-page-slug
 
-# 服务器配置
+# ===== 服务器配置 =====
 SERVER_PORT=8080
 
-# 缓存配置
+# ===== 缓存配置 =====
 CACHE_DURATION=60          # 缓存时间（秒）
 FETCH_INTERVAL=30          # 数据获取间隔（秒）
 
-# 数据库配置
-DB_PATH=./data/kuma-lite.db
+# ===== 数据库配置 =====
+DB_PATH=/data/kuma-lite.db
 
-# 数据保留策略
-DATA_RETENTION_DAYS=30     # 历史数据保留天数
+# ===== 数据保留策略 =====
+DATA_RETENTION_DAYS=30     # 历史数据保留天数（0=不限制）
+
+# ===== 日志配置 =====
+LOG_LEVEL=WARN             # 日志级别: DEBUG, INFO, WARN, ERROR, FATAL
+LOG_ENABLE_COLOR=true      # 启用彩色日志输出
 ```
+
+详细配置说明请参考 [部署文档](./docs/DEPLOYMENT.md)
 
 ## 工作原理
 
@@ -234,70 +257,90 @@ Go 后端提供 RESTful API：
 - ECharts 实现响应时间图表
 - 响应式设计，支持移动端访问
 
-## 功能特性
+## 🎯 功能特性
 
-### 1. 监控展示
-
+### 监控展示
 - ✅ 实时监控状态卡片
-- ✅ 服务可用率统计
-- ✅ 响应时间趋势图表
-- ✅ 事件日志展示
-- ✅ 分组管理和筛选
+- ✅ 分组管理和折叠
+- ✅ 服务可用率环形图
+- ✅ 响应时间统计（LAST/AVG/MAX）
+- ✅ 状态条可视化（在线/离线/重试/维护）
+- ✅ 监控类型图标（HTTP/TCP/Ping/DNS）
 
-### 2. 数据可视化
+### 详情页面
+- ✅ ECharts 响应时间折线图
+- ✅ 可拖拽缩放查看
+- ✅ 历史数据切换（25/50/100条）
+- ✅ 离线状态区域高亮
+- ✅ 数据断点自动识别
 
-- 📊 ECharts 响应时间折线图
-- 📈 可用率百分比展示
-- 📉 状态历史时间轴
-- 🔍 自定义时间范围查询
+### 维护管理
+- ✅ 维护公告展示
+- ✅ 计划中/进行中/已完成状态
+- ✅ Markdown 格式支持
+- ✅ 可折叠卡片设计
 
-### 3. 性能优化
+### 系统功能
+- ✅ 搜索过滤监控项
+- ✅ 自动刷新（可暂停）
+- ✅ 精简/完整模式切换
+- ✅ 主题切换（亮/暗/自动）
+- ✅ 多语言支持（中/英）
+- ✅ 移动端响应式适配
+- ✅ 分级日志系统
 
-- ⚡ 内存缓存，秒级响应
-- 💾 增量数据更新
-- 🔄 智能刷新策略
-- 📦 轻量级部署包
+## 📸 截图
 
-## 开发进度
+### 主页面
+- 状态卡片展示
+- 分组管理
+- 搜索和过滤
 
-- [x] 需求分析和架构设计
-- [ ] 后端 Go 服务开发
-  - [ ] 项目结构搭建
-  - [ ] 配置管理模块
-  - [ ] 数据获取模块（Uptime Kuma API）
-  - [ ] 数据解析逻辑
-  - [ ] 缓存管理模块
-  - [ ] 数据库持久化（SQLite + GORM）
-  - [ ] REST API 接口
-  - [ ] 定时任务调度
-  - [ ] 静态文件服务
-- [ ] 前端开发
-  - [ ] HTML 页面结构
-  - [ ] Vue 组件设计
-  - [ ] 监控卡片组件
-  - [ ] 图表可视化组件
-  - [ ] API 集成
-  - [ ] 响应式布局
-- [ ] Docker 容器化
-  - [ ] Dockerfile 编写
-  - [ ] docker-compose 配置
-  - [ ] 构建优化
-- [ ] 文档完善
-  - [ ] API 文档
-  - [ ] 部署文档
-  - [ ] 使用说明
-- [ ] 测试和优化
+### 详情页
+- 响应时间图表
+- 历史数据查看
+- 交互式缩放
 
-## 参考项目
+### 移动端
+- 响应式布局
+- 垂直堆叠控件
+- 触摸优化
+
+## 🔧 开发说明
+
+### 本地开发
+```bash
+# 安装依赖
+go mod download
+
+# 运行服务（热重载）
+go run backend/main.go
+
+# 或使用 air（推荐）
+air
+```
+
+### Docker 构建
+```bash
+# 构建镜像
+docker build -t kuma-lite:latest .
+
+# 推送到 Docker Hub
+./push-to-dockerhub.sh
+```
+
+## 🤝 参考项目
 
 - [kuma-mieru](https://github.com/Alice39s/kuma-mieru) - 原始参考项目
 - [Uptime Kuma](https://github.com/louislam/uptime-kuma) - 上游监控系统
 
-## 许可证
+## 📄 许可证
 
 MIT License
 
-## 贡献
+## 💬 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+如有问题或建议，请访问 [Issues](https://github.com/ziwiwiz/kuma-lite/issues) 页面。
 

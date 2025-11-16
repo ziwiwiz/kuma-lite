@@ -31,9 +31,23 @@ func InitDB(dbPath string) error {
 
 	DB = db
 
-	// 自动迁移数据表
+	// 自动迁移基础数据表
 	if err := db.AutoMigrate(&models.Monitor{}, &models.HeartBeat{}); err != nil {
 		return err
+	}
+
+	// 执行数据库版本迁移
+	if err := MigrateDatabase(db); err != nil {
+		log.Printf("数据库迁移失败: %v", err)
+		return err
+	}
+
+	// 输出当前数据库版本
+	version, err := GetDBVersion(db)
+	if err != nil {
+		log.Printf("获取数据库版本失败: %v", err)
+	} else {
+		log.Printf("当前数据库版本: v%d", version)
 	}
 
 	log.Println("数据库初始化成功")

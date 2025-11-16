@@ -99,8 +99,10 @@ func getCacheLock(key string) *sync.Mutex {
 
 // InvalidateMonitorCache 使指定监控项的所有相关缓存失效
 func InvalidateMonitorCache(monitorID string) {
-	// 清空主页缓存
-	Delete("history_" + monitorID + "_limit_100")
+	// 清空主页缓存 (支持多种limit值)
+	for _, limit := range []string{"25", "50", "100", "200"} {
+		Delete("history_" + monitorID + "_limit_" + limit)
+	}
 
 	// 清空详情页各时间段缓存
 	for _, hours := range []string{"1", "3", "6", "12", "24", "48", "168"} {
@@ -113,4 +115,30 @@ func InvalidateAllMonitorCaches() {
 	Delete("monitors")
 	Delete("stats")
 	// 注意：这里不直接清空所有历史记录缓存，让它们自然过期
+}
+
+// CleanExpiredMainPageCaches 清理过期的主页缓存
+// 用于后台定时清理，即使用户不在主页也能清理过期缓存
+func CleanExpiredMainPageCaches() {
+	// go-cache 会自动清理过期缓存
+	// 这里可以添加额外的清理逻辑，比如强制删除超过一定年龄的缓存
+	items := Cache.Items()
+	now := time.Now()
+	cleanedCount := 0
+
+	for key, item := range items {
+		// 检查是否是主页历史记录缓存
+		if len(key) > 8 && key[:8] == "history_" &&
+			(len(key) > len("history_X_limit_") && key[len(key)-6:len(key)-3] == "mit") {
+			// 如果缓存已过期超过60秒，强制删除
+			if item.Expiration > 0 && now.Unix() > item.Expiration+60 {
+				Delete(key)
+				cleanedCount++
+			}
+		}
+	}
+
+	if cleanedCount > 0 {
+		// log.Printf("清理了 %d 个过期的主页缓存", cleanedCount)
+	}
 }

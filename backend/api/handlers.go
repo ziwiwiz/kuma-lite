@@ -4,7 +4,9 @@ import (
 	"kuma-lite/backend/cache"
 	"kuma-lite/backend/config"
 	"kuma-lite/backend/database"
+	"kuma-lite/backend/logger"
 	"kuma-lite/backend/models"
+	"kuma-lite/backend/scheduler"
 	"net/http"
 	"strconv"
 	"sync"
@@ -67,9 +69,36 @@ func GetMonitorByID(c *gin.Context) {
 		return
 	}
 
+	// 获取最新的心跳记录以获取 responseTime
+	heartbeats, err := database.GetRecentHeartBeats(id, 1)
+	var responseData map[string]interface{}
+	responseData = map[string]interface{}{
+		"id":          monitor.ID,
+		"name":        monitor.Name,
+		"type":        monitor.Type,
+		"url":         monitor.URL,
+		"method":      monitor.Method,
+		"tags":        monitor.Tags,
+		"description": monitor.Description,
+		"group":       monitor.Group,
+		"groupOrder":  monitor.GroupOrder,
+		"order":       monitor.Order,
+		"status":      monitor.Status,
+		"enabled":     monitor.Enabled,
+		"uptime":      monitor.Uptime,
+		"createdAt":   monitor.CreatedAt,
+	}
+
+	// 添加 responseTime
+	if err == nil && len(heartbeats) > 0 {
+		responseData["responseTime"] = heartbeats[0].ResponseTime
+	} else {
+		responseData["responseTime"] = nil
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Data:    monitor,
+		Data:    responseData,
 	})
 }
 
@@ -255,5 +284,61 @@ func HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    gin.H{"message": "Service is healthy"},
+	})
+}
+
+// GetLogConfig 获取日志配置（用于前端）
+func GetLogConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"logLevel": config.AppConfig.LogLevel,
+	})
+}
+
+// TriggerFetch 触发立即采集Kuma数据
+func TriggerFetch(c *gin.Context) {
+	// 从查询参数获取触发来源
+	source := c.Query("source")
+	if source == "" {
+		source = "未知"
+	}
+
+	// 根据来源显示不同的日志
+	var triggerType string
+	switch source {
+	case "initial":
+		triggerType = "首次加载"
+		logger.Debug("")
+		logger.Debug("╔═══════════════════════════════════════════════════════╗")
+		logger.Info("║  🟢 前端首次加载触发 - %s", time.Now().Format("2006-01-02 15:04:05"))
+		logger.Debug("╚═══════════════════════════════════════════════════════╝")
+	case "countdown":
+		triggerType = "1分钟倒计时"
+		logger.Debug("")
+		logger.Debug("╔═══════════════════════════════════════════════════════╗")
+		logger.Info("║  🔵 前端1分钟倒计时触发 - %s", time.Now().Format("2006-01-02 15:04:05"))
+		logger.Debug("╚═══════════════════════════════════════════════════════╝")
+	case "manual":
+		triggerType = "手动刷新"
+		logger.Debug("")
+		logger.Debug("╔═══════════════════════════════════════════════════════╗")
+		logger.Info("║  🔴 前端手动刷新按钮触发 - %s", time.Now().Format("2006-01-02 15:04:05"))
+		logger.Debug("╚═══════════════════════════════════════════════════════╝")
+	default:
+		triggerType = "前端触发"
+		logger.Debug("")
+		logger.Debug("╔═══════════════════════════════════════════════════════╗")
+		logger.Info("║  ⚪ 前端触发 - %s", time.Now().Format("2006-01-02 15:04:05"))
+		logger.Debug("╚═══════════════════════════════════════════════════════╝")
+	}
+
+	logger.Info("📨 [API] 收到前端采集请求 - 来源: %s", triggerType)
+
+	// 异步执行，避免阻塞请求
+	go scheduler.FetchAndStoreWithSource(triggerType)
+
+	logger.Info("✅ [API] 已启动异步采集任务 - 来源: %s", triggerType)
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    gin.H{"message": "数据采集已触发", "source": triggerType},
 	})
 }

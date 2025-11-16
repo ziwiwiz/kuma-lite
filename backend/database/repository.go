@@ -64,19 +64,23 @@ func GetMonitorByID(id int) (*models.Monitor, error) {
 	return &monitor, nil
 }
 
-// SaveHeartBeat 保存心跳记录
-func SaveHeartBeat(heartbeat *models.HeartBeat) error {
+// SaveHeartBeat 保存心跳记录，返回是否插入了新数据
+func SaveHeartBeat(heartbeat *models.HeartBeat) (bool, error) {
 	// 检查是否已存在相同的心跳记录（根据 monitorID 和 createdAt）
 	var existing models.HeartBeat
 	result := DB.Where("monitor_id = ? AND created_at = ?", heartbeat.MonitorID, heartbeat.CreatedAt).First(&existing)
 
 	if result.Error == nil {
 		// 已存在，跳过
-		return nil
+		return false, nil
 	}
 
 	// 不存在，创建新记录
-	return DB.Create(heartbeat).Error
+	err := DB.Create(heartbeat).Error
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // GetRecentHeartBeats 获取监控项最近N条心跳记录(不限制时间范围)
@@ -123,11 +127,32 @@ func GetStats() (*models.Stats, error) {
 	// 总监控数
 	query.Count(&stats.TotalMonitors)
 
-	// 正常监控数
-	DB.Model(&models.Monitor{}).Where("enabled = ? AND status = ?", true, 1).Count(&stats.UpMonitors)
+	// 离线监控数 (status = 0)
+	DB.Model(&models.Monitor{}).Where("enabled = ? AND status = ?", true, 0).Count(&stats.DownMonitors)
 
-	// 异常监控数（包括离线和重试中）
-	DB.Model(&models.Monitor{}).Where("enabled = ? AND status IN ?", true, []int{0, 2}).Count(&stats.DownMonitors)
+	// 重试中监控数 (status = 2)
+	DB.Model(&models.Monitor{}).Where("enabled = ? AND status = ?", true, 2).Count(&stats.RetryMonitors)
+
+	// 维护中监控数 (status = 1 且最近心跳的 response_time 为 NULL)
+	// 使用子查询统计维护中的监控项
+	DB.Raw(`
+		SELECT COUNT(DISTINCT m.id)
+		FROM monitors m
+		INNER JOIN heart_beats hb ON hb.monitor_id = m.id
+		WHERE m.enabled = ?
+		AND m.status = ?
+		AND hb.response_time IS NULL
+		AND hb.created_at = (
+			SELECT MAX(created_at)
+			FROM heart_beats
+			WHERE monitor_id = m.id
+		)
+	`, true, 1).Scan(&stats.MaintenanceMonitors)
+
+	// 真正在线的监控数 = status=1 的总数 - 维护中的数量
+	var status1Count int64
+	DB.Model(&models.Monitor{}).Where("enabled = ? AND status = ?", true, 1).Count(&status1Count)
+	stats.UpMonitors = status1Count - stats.MaintenanceMonitors
 
 	// 平均可用率
 	var avgUptime float64
@@ -181,12 +206,12 @@ func DeleteMonitor(id int) error {
 	return tx.Commit().Error
 }
 
-// SyncMonitors 同步监控项列表，删除不在新列表中的监控项
-// 为避免误删除，只有在新列表数量达到一定阈值时才执行删除操作
+// SyncMonitors 同步监控项列表，将不在新列表中的监控项设置为禁用状态（不删除数据）
+// 同时将重新出现的监控项设置为启用状态
 func SyncMonitors(currentMonitorIDs []int) error {
 	if len(currentMonitorIDs) == 0 {
-		// 如果当前没有监控项，不执行删除操作（可能是获取数据失败）
-		log.Println("警告: 获取到的监控项数量为0，跳过同步删除操作")
+		// 如果当前没有监控项，不执行操作（可能是获取数据失败）
+		log.Println("警告: 获取到的监控项数量为0，跳过同步操作")
 		return nil
 	}
 
@@ -196,13 +221,19 @@ func SyncMonitors(currentMonitorIDs []int) error {
 		return err
 	}
 
-	// 安全检查：如果数据库中有监控项，但获取到的数量显著少于现有数量
-	// 则认为可能是数据获取异常，不执行删除操作
+	// 安全检查：如果数据库中有监控项，但获取到的数量显著少于现有启用数量
+	// 则认为可能是数据获取异常，不执行操作
 	if len(existingMonitors) > 0 {
-		// 如果新获取的监控项数量少于现有数量的50%，认为异常
-		if len(currentMonitorIDs) < len(existingMonitors)/2 {
-			log.Printf("警告: 获取到的监控项数量(%d)显著少于现有数量(%d)，可能是Kuma服务异常，跳过同步删除操作",
-				len(currentMonitorIDs), len(existingMonitors))
+		enabledCount := 0
+		for _, m := range existingMonitors {
+			if m.Enabled {
+				enabledCount++
+			}
+		}
+		// 如果新获取的监控项数量少于现有启用数量的50%，认为异常
+		if enabledCount > 0 && len(currentMonitorIDs) < enabledCount/2 {
+			log.Printf("警告: 获取到的监控项数量(%d)显著少于现有启用数量(%d)，可能是Kuma服务异常，跳过同步操作",
+				len(currentMonitorIDs), enabledCount)
 			return nil
 		}
 	}
@@ -213,22 +244,35 @@ func SyncMonitors(currentMonitorIDs []int) error {
 		currentIDMap[id] = true
 	}
 
-	// 找出需要删除的监控项
-	deletedCount := 0
+	// 处理监控项的启用/禁用状态
+	disabledCount := 0
+	enabledCount := 0
 	for _, monitor := range existingMonitors {
 		if !currentIDMap[monitor.ID] {
-			// 这个监控项在Kuma中已不存在，需要删除
-			log.Printf("检测到监控项已从Kuma删除: [%s] (ID: %d)", monitor.Name, monitor.ID)
-			if err := DeleteMonitor(monitor.ID); err != nil {
-				log.Printf("删除监控项失败 [%s]: %v", monitor.Name, err)
-				return err
+			// 这个监控项在Kuma中已不存在，设置为禁用状态
+			if monitor.Enabled {
+				log.Printf("检测到监控项已从Kuma移除，设置为禁用: [%s] (ID: %d)", monitor.Name, monitor.ID)
+				if err := DB.Model(&monitor).Update("enabled", false).Error; err != nil {
+					log.Printf("禁用监控项失败 [%s]: %v", monitor.Name, err)
+					return err
+				}
+				disabledCount++
 			}
-			deletedCount++
+		} else {
+			// 监控项在Kuma中存在，如果之前被禁用，重新启用
+			if !monitor.Enabled {
+				log.Printf("检测到监控项已恢复，设置为启用: [%s] (ID: %d)", monitor.Name, monitor.ID)
+				if err := DB.Model(&monitor).Update("enabled", true).Error; err != nil {
+					log.Printf("启用监控项失败 [%s]: %v", monitor.Name, err)
+					return err
+				}
+				enabledCount++
+			}
 		}
 	}
 
-	if deletedCount > 0 {
-		log.Printf("同步删除完成: 删除了 %d 个监控项", deletedCount)
+	if disabledCount > 0 || enabledCount > 0 {
+		log.Printf("同步完成: 禁用了 %d 个监控项, 启用了 %d 个监控项", disabledCount, enabledCount)
 	}
 
 	return nil

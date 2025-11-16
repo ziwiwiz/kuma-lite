@@ -13,10 +13,11 @@
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>监控详情 - Kuma Lite</title>
-    <link rel="stylesheet" href="/css/style-detail.css?v=20251019-dark-mode">
+    <link rel="stylesheet" href="/css/style-detail.css?v=20251117-status-fix">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/js/logger.js"></script>
 </head>
 <body>
     <div id="app">
@@ -32,7 +33,7 @@
             <div class="monitor-info-card">
                 <div class="info-header">
                     <div class="monitor-title-section">
-                        <button class="btn-back-status" :class="getStatusIconClass(monitor.status)" @click="goBack">
+                        <button class="btn-back-status" :class="getStatusIconClass(monitor.status, monitor.responseTime)" @click="goBack">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                 <path d="M19 12H5M12 19l-7-7 7-7"/>
                             </svg>
@@ -61,33 +62,37 @@
 
                 <div class="info-stats">
                     <div class="stat-box">
-                        <span class="stat-label">{{ t.totalChecks }}:</span>
+                        <span class="stat-label">{{ t.totalChecks }}</span>
                         <span class="stat-value">{{ totalChecks }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">{{ t.onlineChecks }}:</span>
+                        <span class="stat-label">{{ t.onlineChecks }}</span>
                         <span class="stat-value">{{ onlineChecks }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">{{ t.onlineRate }}:</span>
-                        <span class="stat-value">{{ onlineRate }}</span>
+                        <span class="stat-label">{{ t.onlineRate }}</span>
+                        <span class="stat-value stat-uptime">{{ onlineRate }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">{{ t.currentResponse }}:</span>
-                        <span class="stat-value">{{ currentResponseTime }}<span v-if="typeof currentResponseTime === 'number'">{{ t.ms }}</span></span>
+                        <span class="stat-label">{{ t.currentResponse }}</span>
+                        <span class="stat-value">{{ currentResponseTime }}<span v-if="typeof currentResponseTime === 'number'"> {{ t.ms }}</span></span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">{{ t.avgResponse }}:</span>
-                        <span class="stat-value">{{ avgResponseTime }}{{ t.ms }}</span>
+                        <span class="stat-label">{{ t.avgResponse }}</span>
+                        <span class="stat-value">{{ avgResponseTime != null ? avgResponseTime + ' ' + t.ms : '-' }}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">{{ t.maxResponse }}:</span>
-                        <span class="stat-value">{{ maxResponseTime }}{{ t.ms }}</span>
+                        <span class="stat-label">{{ t.minResponse }}</span>
+                        <span class="stat-value">{{ minResponseTime != null ? minResponseTime + ' ' + t.ms : '-' }}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">{{ t.maxResponse }}</span>
+                        <span class="stat-value">{{ maxResponseTime != null ? maxResponseTime + ' ' + t.ms : '-' }}</span>
                     </div>
                 </div>
             </div>
 
-            <!-- 响应时间趋势图 -->
+            <!-- 响应时间趋势图 (包含4个状态图例) -->
             <div class="chart-section">
                 <div class="chart-legend-bar">
                     <span class="chart-y-label">{{ t.responseTime }} ({{ t.ms }})</span>
@@ -99,6 +104,10 @@
                         <div class="legend-item">
                             <span class="legend-color" style="background-color: #f59e0b;"></span>
                             <span>{{ t.retry }}</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background-color: #3b82f6;"></span>
+                            <span>{{ t.maintenance }}</span>
                         </div>
                         <div class="legend-item">
                             <span class="legend-color" style="background-color: #ef4444;"></span>

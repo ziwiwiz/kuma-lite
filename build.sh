@@ -1,25 +1,41 @@
 #!/bin/bash
 
-# Kuma-Lite 构建脚本
+# Kuma-Lite Docker 构建脚本
 
 echo "================================"
-echo "   Kuma-Lite 构建脚本"
+echo "   Kuma-Lite Docker 构建"
 echo "================================"
 
-# 创建输出目录
-mkdir -p dist
+# 设置镜像名称和标签
+IMAGE_NAME="kuma-lite"
+IMAGE_TAG="latest"
 
-# 构建 Linux 版本
-echo "构建 Linux 版本..."
-CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o dist/kuma-lite-linux-amd64 backend/main.go
-
-# 构建 macOS 版本（如果在 macOS 上）
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "构建 macOS 版本..."
-    CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o dist/kuma-lite-darwin-amd64 backend/main.go
-    CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o dist/kuma-lite-darwin-arm64 backend/main.go
-fi
-
+echo "使用 Docker 多阶段构建..."
+echo "镜像名称: ${IMAGE_NAME}:${IMAGE_TAG}"
 echo ""
-echo "构建完成！输出文件在 dist/ 目录"
-ls -lh dist/
+
+# 构建 Docker 镜像
+docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+
+# 检查构建结果
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "================================"
+    echo "   构建成功！"
+    echo "================================"
+    echo ""
+    echo "镜像信息:"
+    docker images ${IMAGE_NAME}:${IMAGE_TAG}
+    echo ""
+    echo "运行容器:"
+    echo "  docker-compose up -d"
+    echo ""
+    echo "或者直接运行:"
+    echo "  docker run -d -p 8080:8080 -v \$(pwd)/data:/data ${IMAGE_NAME}:${IMAGE_TAG}"
+else
+    echo ""
+    echo "================================"
+    echo "   构建失败！"
+    echo "================================"
+    exit 1
+fi

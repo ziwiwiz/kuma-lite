@@ -99,8 +99,8 @@ body {
 }
 
 .btn-back-status {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -125,69 +125,92 @@ body {
     background: #ef4444;
 }
 
-.btn-back-status.maintenance {
+.btn-back-status.retry {
     background: #f59e0b;
 }
 
+.btn-back-status.maintenance {
+    background: #3b82f6;
+}
+
 .btn-back-status svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
 }
 
 .info-stats {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
 }
 
 .stat-box {
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 6px;
-    padding: 10px 14px;
+    padding: 12px 16px;
     background: var(--bg-tertiary);
-    border-radius: 6px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .stat-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     white-space: nowrap;
 }
 
 .stat-value {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
+}
+
+.stat-value.stat-uptime {
+    color: #10b981;
 }
 
 /* 周期选择器 */
 .period-dropdown {
     position: relative;
-    width: 110px;
+    min-width: 150px;
     flex-shrink: 0;
 }
 
 .period-dropdown-btn {
     width: 100%;
-    padding: 6px 12px;
+    padding: 8px 12px;
     border: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-    border-radius: 6px;
+    background: white;
+    border-radius: 8px;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     color: var(--text-primary);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .period-dropdown-btn:hover {
-    border-color: #10b981;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+html.dark-mode .period-dropdown-btn,
+body.dark-mode .period-dropdown-btn {
+    background: #1f2937;
+    border-color: #4b5563;
 }
 
 .period-dropdown-btn svg {
@@ -198,19 +221,19 @@ body {
 
 .period-dropdown-menu {
     position: absolute;
-    top: calc(100% + 4px);
+    top: calc(100% + 6px);
     left: 0;
     right: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
-    box-shadow: var(--shadow-md);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 1000;
     overflow: hidden;
 }
 
 .period-dropdown-item {
-    padding: 8px 12px;
+    padding: 10px 14px;
     cursor: pointer;
     transition: all 0.2s;
     color: var(--text-secondary);
@@ -219,13 +242,23 @@ body {
 }
 
 .period-dropdown-item:hover {
-    background: var(--bg-tertiary);
-    color: #10b981;
+    background: #f3f4f6;
+    color: var(--text-primary);
+}
+
+html.dark-mode .period-dropdown-item:hover,
+body.dark-mode .period-dropdown-item:hover {
+    background: #374151;
 }
 
 .period-dropdown-item.active {
     background: #10b981;
     color: white;
+    font-weight: 600;
+}
+
+.period-dropdown-item.active:hover {
+    background: #059669;
 }
 
 /* Vue 自定义 Tooltip */
@@ -247,10 +280,11 @@ body {
 /* 图表区域 */
 .chart-section {
     background: var(--bg-secondary);
-    border-radius: 12px;
-    padding: 12px 20px;
+    border-radius: 16px;
+    padding: 20px;
     margin-bottom: 20px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color);
     overflow: visible;
 }
 
@@ -258,7 +292,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 5px;
+    margin-bottom: 12px;
     gap: 15px;
     flex-wrap: wrap;
 }
@@ -266,12 +300,14 @@ body {
 .chart-y-label {
     font-size: 13px;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .status-legend {
     display: flex;
-    gap: 15px;
+    gap: 16px;
     flex-wrap: wrap;
 }
 
@@ -284,9 +320,9 @@ body {
 }
 
 .legend-color {
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
 }
 
 
@@ -348,6 +384,39 @@ body {
 }
 
 /* 响应式设计 */
+
+/* 平板设备适配 (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+    #app {
+        padding: 16px;
+    }
+    
+    .monitor-info-card {
+        padding: 14px 18px;
+    }
+    
+    .monitor-title-section h1 {
+        font-size: 19px;
+    }
+    
+    .info-stats {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+    }
+    
+    .stat-box {
+        padding: 10px 14px;
+    }
+    
+    .chart-section {
+        padding: 16px 18px;
+    }
+    
+    .chart-container-large {
+        height: 380px;
+    }
+}
+
 @media (max-width: 768px) {
     #app {
         padding: 10px;
@@ -383,15 +452,16 @@ body {
 
     .info-stats {
         grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
+        gap: 10px;
     }
     
-    .stat-item {
-        padding: 10px;
+    .stat-box {
+        padding: 10px 12px;
+        gap: 4px;
     }
     
     .stat-label {
-        font-size: 11px;
+        font-size: 10px;
     }
     
     .stat-value {
@@ -400,6 +470,10 @@ body {
 
     .chart-container-large {
         height: 300px;
+    }
+    
+    .chart-section {
+        padding: 14px 16px;
     }
 
     .period-dropdown {
@@ -449,19 +523,47 @@ body {
     }
     
     .info-stats {
-        gap: 6px;
+        gap: 8px;
     }
     
-    .stat-item {
-        padding: 8px;
+    .stat-box {
+        padding: 8px 10px;
+        gap: 4px;
     }
     
     .stat-label {
-        font-size: 10px;
+        font-size: 9px;
     }
     
     .stat-value {
         font-size: 16px;
+    }
+    
+    .chart-section {
+        padding: 12px 14px;
+        border-radius: 12px;
+    }
+    
+    .chart-legend-bar {
+        margin-bottom: 8px;
+    }
+    
+    .chart-y-label {
+        font-size: 11px;
+    }
+    
+    .status-legend {
+        font-size: 10px;
+        gap: 10px;
+    }
+    
+    .legend-color {
+        width: 6px;
+        height: 6px;
+    }
+    
+    .chart-container-large {
+        height: 250px;
     }
     
     .period-dropdown-btn {

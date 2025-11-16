@@ -12,7 +12,9 @@ import (
 )
 
 type KumaStatusPage struct {
-	PublicGroupList []PublicGroup `json:"publicGroupList"`
+	PublicGroupList []PublicGroup     `json:"publicGroupList"`
+	Incident        *KumaIncident     `json:"incident"`
+	MaintenanceList []KumaMaintenance `json:"maintenanceList"`
 }
 
 type KumaHeartBeatResponse struct {
@@ -35,10 +37,30 @@ type KumaMonitor struct {
 }
 
 type KumaHeartBeat struct {
-	Status int     `json:"status"`
-	Time   string  `json:"time"`
-	Msg    string  `json:"msg"`
-	Ping   float64 `json:"ping"`
+	Status int      `json:"status"`
+	Time   string   `json:"time"`
+	Msg    string   `json:"msg"`
+	Ping   *float64 `json:"ping"` // 使用指针类型以区分 null 和 0
+}
+
+type KumaIncident struct {
+	ID              int    `json:"id"`
+	Style           string `json:"style"`
+	Title           string `json:"title"`
+	Content         string `json:"content"`
+	Pin             int    `json:"pin"`
+	CreatedDate     string `json:"createdDate"`
+	LastUpdatedDate string `json:"lastUpdatedDate"`
+}
+
+type KumaMaintenance struct {
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Strategy    string `json:"strategy"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	Status      string `json:"status"`
 }
 
 func FetchKumaData() (*KumaStatusPage, *KumaHeartBeatResponse, error) {
@@ -130,6 +152,12 @@ func ParseMonitors(statusPage *KumaStatusPage, heartbeatData *KumaHeartBeatRespo
 				}
 				if heartbeats, ok := heartbeatData.HeartbeatList[monitorIDStr]; ok && len(heartbeats) > 0 {
 					latestHeartBeat := heartbeats[len(heartbeats)-1]
+
+					// 状态映射逻辑:
+					// - status=1 且 ping=null: 维护中 (前端需要特别处理显示为蓝色)
+					// - status=1 且 ping≠null: 在线绿色
+					// - status=2 且 ping=null: 重试中橙色
+					// - status=0: 离线红色
 					monitor.Status = latestHeartBeat.Status
 				}
 			}
@@ -150,10 +178,24 @@ func ParseHeartBeats(monitorID int, heartbeatData *KumaHeartBeatResponse) []mode
 		return heartbeats
 	}
 	for _, kumaHB := range kumaHeartbeats {
+		// 保留原始状态，不做转换
+		// - status=1 且 ping=null: 维护中
+		// - status=1 且 ping≠null: 在线
+		// - status=2: 重试中
+		// - status=0: 离线
+		status := kumaHB.Status
+		var responseTime *int
+
+		if kumaHB.Ping != nil {
+			pingValue := int(*kumaHB.Ping)
+			responseTime = &pingValue
+		}
+		// 如果 ping 为 null，responseTime 保持为 nil
+
 		hb := models.HeartBeat{
 			MonitorID:    monitorID,
-			Status:       kumaHB.Status,
-			ResponseTime: int(kumaHB.Ping),
+			Status:       status,
+			ResponseTime: responseTime,
 			Message:      kumaHB.Msg,
 		}
 		timeFormats := []string{

@@ -92,6 +92,108 @@ body {
     color: white;
 }
 
+/* ==================== 系统状态栏 ==================== */
+
+.system-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+}
+
+.system-status-bar.status-operational {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.system-status-bar.status-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.system-status-bar.status-outage {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+.status-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.status-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.status-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.status-text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.status-title {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.status-stats {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    opacity: 0.95;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stat-item svg {
+    width: 8px;
+    height: 8px;
+}
+
+.stat-online svg {
+    color: #10b981;
+}
+
+.stat-retry svg {
+    color: #f59e0b;
+}
+
+.stat-offline svg {
+    color: #ef4444;
+}
+
+.stat-maintenance svg {
+    color: #3b82f6;
+}
+
+.stat-divider {
+    opacity: 0.5;
+}
+
 .banner-icon {
     width: 42px;
     height: 42px;
@@ -311,53 +413,124 @@ body.dark-mode .dropdown-item:hover {
 /* 控制栏 */
 .control-bar {
     display: flex;
-    align-items: center;
-    gap: 15px;
+    align-items: stretch;
+    gap: 20px;
     margin-bottom: 30px;
-    padding: 12px 20px;
+    padding: 16px 24px;
     background: var(--bg-secondary);
     border-radius: 12px;
     box-shadow: var(--shadow-sm);
 }
 
+.control-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-left: auto; /* 将按钮推到右侧 */
+}
+
 .btn-pause, .btn-refresh {
-    padding: 8px 16px;
-    border: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    background: white;
+    color: var(--text-primary);
 }
 
-.btn-pause {
-    background: #3b82f6;
-    color: white;
+html.dark-mode .btn-pause,
+html.dark-mode .btn-refresh {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.btn-pause svg,
+.btn-refresh svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
 .btn-pause:hover {
-    background: #2563eb;
+    background: #f3f4f6;
+    border-color: #3b82f6;
 }
 
-.btn-refresh {
-    background: #10b981;
-    color: white;
+html.dark-mode .btn-pause:hover {
+    background: rgba(59, 130, 246, 0.1);
 }
 
 .btn-refresh:hover {
-    background: #059669;
+    background: #f3f4f6;
+    border-color: #10b981;
+}
+
+html.dark-mode .btn-refresh:hover {
+    background: rgba(16, 185, 129, 0.1);
 }
 
 .btn-refresh:disabled {
-    background: #9ca3af;
+    background: #f9fafb;
     cursor: not-allowed;
+    opacity: 0.5;
+    border-color: var(--border-color);
+}
+
+html.dark-mode .btn-refresh:disabled {
+    background: var(--bg-secondary);
+}
+
+.refresh-status {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 .refresh-info {
-    flex: 1;
-    text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 13px;
+}
+
+.refresh-time {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.refresh-countdown {
+    color: var(--text-secondary);
+}
+
+.refresh-paused {
+    color: #f59e0b;
+    font-weight: 500;
+}
+
+.progress-bar {
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    /* 背景颜色通过内联样式动态设置 */
+    border-radius: 2px;
+    transition: width 1s linear, background 0.5s ease;
 }
 
 /* 监控分组 */
@@ -394,6 +567,30 @@ body.dark-mode .dropdown-item:hover {
     }
 }
 
+/* 平板设备适配 (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+    #app {
+        padding: 16px;
+    }
+    
+    .monitor-cards {
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 18px;
+    }
+    
+    .card-main {
+        padding: 16px;
+    }
+    
+    .monitor-name {
+        font-size: 18px;
+    }
+    
+    .chart-container {
+        height: 140px;
+    }
+}
+
 @media (max-width: 768px) {
     #app {
         padding: 12px;
@@ -403,61 +600,69 @@ body.dark-mode .dropdown-item:hover {
         grid-template-columns: 1fr;
     }
     
-    /* 顶部横幅移动端适配 */
-    .top-banner {
+    /* 系统状态栏移动端适配 - 第一行横向，搜索栏独占一行 */
+    .system-status-bar {
+        flex-direction: row;
         flex-wrap: wrap;
-        padding: 12px 16px;
-        gap: 10px;
+        align-items: flex-start;
+        padding: 16px;
+        gap: 0;
     }
     
-    /* 第一行: 图标 + 文字 + 主题/语言按钮 */
-    .banner-icon {
-        width: 36px;
-        height: 36px;
-        order: 1;
-    }
-    
-    .banner-icon svg {
-        width: 20px;
-        height: 20px;
-    }
-    
-    .banner-text {
-        font-size: 15px;
+    .status-main {
         flex: 1;
         min-width: 0;
-        order: 2;
+        margin-right: 12px;
     }
     
-    /* 主题和语言按钮放在第一行右侧 */
+    .status-icon {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .status-icon svg {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .status-title {
+        font-size: 16px;
+    }
+    
+    .status-stats {
+        flex-wrap: wrap;
+        gap: 10px;
+        font-size: 13px;
+    }
+    
+    /* 横幅控制按钮移动端 - 靠右对齐与切换按钮对齐 */
     .banner-controls {
-        order: 3;
-        width: auto;
+        display: flex;
         justify-content: flex-end;
-        gap: 6px;
+        gap: 8px;
+        flex-shrink: 0;
+        margin-left: auto;
         margin-right: 0;
     }
     
     .banner-icon-btn {
-        width: 36px;
-        height: 36px;
+        width: 40px;
+        height: 40px;
     }
     
     .banner-icon-btn svg {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
     }
     
-    /* 第二行: 搜索框 + 切换按钮组 */
+    /* 搜索栏组合移动端 - 独占完整宽度 */
     .banner-search-group {
-        order: 4;
         width: 100%;
         display: flex;
         gap: 8px;
-        margin-top: 2px;
+        margin-top: 12px;
     }
     
-    /* 搜索框自适应宽度 */
     .banner-search {
         flex: 1;
         position: relative;
@@ -465,43 +670,78 @@ body.dark-mode .dropdown-item:hover {
     
     .search-input {
         width: 100%;
-        height: 36px;
+        height: 40px;
         font-size: 14px;
-        padding: 8px 32px 8px 10px;
+        padding: 10px 36px 10px 12px;
     }
     
-    /* 切换按钮固定宽度 */
     .banner-toggle {
-        width: 36px;
-        height: 36px;
+        width: 40px;
+        height: 40px;
         flex-shrink: 0;
     }
     
     .banner-toggle svg {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
     }
     
-    /* 控制栏移动端适配 */
+    /* 控制栏移动端适配 - 垂直布局 */
     .control-bar {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+        gap: 12px;
+    }
+    
+    .refresh-status {
+        width: 100%;
+    }
+    
+    .refresh-info {
+        font-size: 13px;
+        margin-bottom: 6px;
+        display: flex;
         flex-wrap: wrap;
         gap: 8px;
-        padding: 10px 12px;
-        margin-bottom: 16px;
+    }
+    
+    .progress-bar {
+        width: 100%;
+    }
+    
+    .control-buttons {
+        width: 100%;
+        display: flex;
+        gap: 12px;
+        margin-left: 0;
     }
     
     .btn-pause,
     .btn-refresh {
-        font-size: 13px;
-        padding: 8px 16px;
-        height: 36px;
+        flex: 1;
+        font-size: 14px;
+        padding: 11px 16px;
+        height: 46px;
+        justify-content: center;
+    }
+    
+    .btn-pause svg,
+    .btn-refresh svg {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .refresh-status {
+        width: 100%;
     }
     
     .refresh-info {
-        width: 100%;
-        text-align: center;
         font-size: 12px;
-        margin-top: 4px;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
     }
     
     /* 监控分组移动端适配 */
@@ -527,78 +767,158 @@ body.dark-mode .dropdown-item:hover {
         width: 16px;
         height: 16px;
     }
+    
+    /* 事件横幅移动端适配 */
+    .incident-alert {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 10px;
+    }
+    
+    .incident-header {
+        gap: 10px;
+    }
+    
+    .incident-icon {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .incident-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .incident-title {
+        font-size: 15px;
+    }
+    
+    .incident-badge {
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+    
+    .incident-content {
+        font-size: 13px;
+        padding-left: 46px;
+    }
+    
+    .maintenance-alert {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 10px;
+    }
 }
 
 /* 超小屏幕适配 (< 480px) */
 @media (max-width: 480px) {
     #app {
-        padding: 8px;
+        padding: 10px;
     }
     
-    .top-banner {
-        padding: 10px 12px;
-        gap: 8px;
+    /* 系统状态栏超小屏 */
+    .system-status-bar {
+        padding: 14px;
         border-radius: 10px;
     }
     
-    /* 第一行: 图标 + 文字 + 主题/语言按钮 */
-    .banner-icon {
-        width: 32px;
-        height: 32px;
-        order: 1;
+    .status-icon {
+        width: 36px;
+        height: 36px;
     }
     
-    .banner-icon svg {
-        width: 18px;
-        height: 18px;
+    .status-icon svg {
+        width: 22px;
+        height: 22px;
     }
     
-    .banner-text {
-        font-size: 13px;
-        order: 2;
+    .status-title {
+        font-size: 15px;
     }
     
-    /* 主题和语言按钮在第一行右侧 */
+    .status-stats {
+        gap: 8px;
+        font-size: 12px;
+    }
+    
+    /* 横幅控制按钮超小屏 */
     .banner-controls {
-        order: 3;
         gap: 6px;
     }
     
     .banner-icon-btn {
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
     }
     
     .banner-icon-btn svg {
-        width: 16px;
-        height: 16px;
+        width: 18px;
+        height: 18px;
     }
     
-    /* 第二行: 搜索框 + 切换按钮组 */
+    /* 搜索栏组合超小屏 */
     .banner-search-group {
-        order: 4;
         width: 100%;
         display: flex;
         gap: 6px;
-        margin-top: 2px;
+        margin-top: 8px;
     }
     
-    /* 搜索框自适应宽度 */
     .banner-search {
         flex: 1;
         position: relative;
     }
     
     .search-input {
-        height: 32px;
+        height: 36px;
         font-size: 13px;
-        padding: 6px 28px 6px 8px;
+        padding: 8px 32px 8px 10px;
     }
     
-    .search-icon {
+    .search-icon,
+    .clear-search {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .banner-toggle {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .banner-toggle svg {
+        width: 18px;
+        height: 18px;
+    }
+    
+    /* 控制栏超小屏 */
+    .control-bar {
+        flex-direction: column;
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    
+    .refresh-info {
+        font-size: 12px;
+        margin-bottom: 5px;
+    }
+    
+    .control-buttons {
+        gap: 10px;
+        margin-left: 0;
+    }
+    
+    .btn-pause,
+    .btn-refresh {
+        font-size: 13px;
+        padding: 10px 14px;
+        height: 42px;
+    }
+    
+    .btn-pause svg,
+    .btn-refresh svg {
         width: 16px;
         height: 16px;
-        right: 8px;
     }
     
     .clear-search {
@@ -611,33 +931,43 @@ body.dark-mode .dropdown-item:hover {
         height: 14px;
     }
     
-    /* 切换按钮固定宽度 */
+    /* 切换按钮与其他图标按钮统一尺寸 */
     .banner-toggle {
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         flex-shrink: 0;
     }
     
     .banner-toggle svg {
-        width: 16px;
-        height: 16px;
+        width: 18px;
+        height: 18px;
     }
     
     .control-bar {
-        padding: 8px 10px;
-        gap: 6px;
+        padding: 10px 12px;
+        gap: 10px;
+    }
+    
+    .control-buttons {
+        gap: 8px;
     }
     
     .btn-pause,
     .btn-refresh {
         font-size: 12px;
         padding: 6px 12px;
-        height: 32px;
-        flex: 1;
+        gap: 6px;
+    }
+    
+    .btn-pause svg,
+    .btn-refresh svg {
+        width: 14px;
+        height: 14px;
     }
     
     .refresh-info {
         font-size: 11px;
+        gap: 6px;
     }
     
     .group-title {
@@ -647,30 +977,138 @@ body.dark-mode .dropdown-item:hover {
     }
     
     .monitor-groups {
-        gap: 20px;
+        gap: 16px;
+    }
+    
+    /* 移动端卡片优化 */
+    .card-main {
+        padding: 14px;
+    }
+    
+    .monitor-name {
+        font-size: 16px;
+    }
+    
+    .monitor-method {
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+    
+    .monitor-tag {
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+    
+    .response-info {
+        font-size: 12px;
+        gap: 10px;
+    }
+    
+    .response-label {
+        font-size: 10px;
+    }
+    
+    .response-value {
+        font-size: 13px;
+    }
+    
+    .status-legend {
+        font-size: 11px;
+        gap: 12px;
+    }
+    
+    .chart-tabs button {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+    
+    .chart-container {
+        height: 120px;
+    }
+    
+    /* 系统状态栏超小屏幕适配 */
+    .system-status-bar {
+        padding: 12px 14px;
+    }
+    
+    .status-main {
+        gap: 10px;
+    }
+    
+    .status-icon {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .status-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .status-title {
+        font-size: 14px;
+    }
+    
+    .status-stats {
+        font-size: 11px;
+        gap: 6px;
+    }
+    
+    /* 事件横幅超小屏幕适配 */
+    .incident-alert {
+        padding: 10px 12px;
+    }
+    
+    .incident-header {
+        gap: 8px;
+    }
+    
+    .incident-icon {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .incident-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .incident-title {
+        font-size: 14px;
+    }
+    
+    .incident-badge {
+        padding: 2px 6px;
+        font-size: 9px;
+    }
+    
+    .incident-content {
+        font-size: 12px;
+        padding-left: 40px;
     }
 }
 
 /* 监控卡片 */
 .monitor-card {
     background: var(--bg-secondary);
-    border-radius: 12px;
-    box-shadow: var(--shadow-sm);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
     overflow: hidden;
+    border: 1px solid var(--border-color);
 }
 
 .monitor-card.expanded {
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 .monitor-card:hover .card-main {
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     transform: translateY(-2px);
 }
 
 .card-main {
-    padding: 16px 18px;
+    padding: 20px 28px;  /* 增加左右 padding 到 28px，让上方内容区域在视觉上与趋势图更协调 */
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -680,7 +1118,7 @@ body.dark-mode .dropdown-item:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 8px;  /* 减小下边距，让整体更紧凑 */
 }
 
 .monitor-title {
@@ -692,8 +1130,8 @@ body.dark-mode .dropdown-item:hover {
 }
 
 .status-icon {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -702,32 +1140,144 @@ body.dark-mode .dropdown-item:hover {
 }
 
 .status-icon.up {
-    background: #10b981;
+    background: #10b981;  /* 绿色 - 在线 */
     color: white;
 }
 
 .status-icon.down {
-    background: #ef4444;
+    background: #ef4444;  /* 红色 - 离线 */
+    color: white;
+}
+
+.status-icon.retry {
+    background: #f59e0b;  /* 橙色 - 重试中 */
     color: white;
 }
 
 .status-icon.maintenance {
-    background: #f59e0b;
+    background: #3b82f6;  /* 蓝色 - 维护状态 */
     color: white;
 }
 
 .status-icon svg {
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
+}
+
+.monitor-type-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    position: relative;
+}
+
+.monitor-type-icon:hover {
+    opacity: 1;
+}
+
+.monitor-type-icon::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    font-size: 12px;
+    white-space: nowrap;
+    border-radius: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease-in-out;
+    z-index: 1000;
+}
+
+html.dark-mode .monitor-type-icon::after {
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--text-primary);
+}
+
+.monitor-type-icon:hover::after {
+    opacity: 1;
+    transition-delay: 0.3s;
+}
+
+.monitor-type-icon svg {
+    width: 100%;
+    height: 100%;
 }
 
 .monitor-name {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.monitor-method {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.monitor-method.method-get {
+    background: #06b6d4;  /* 青色 - GET方法标签 */
+    color: white;
+}
+
+.monitor-method.method-post {
+    background: #3b82f6;
+    color: white;
+}
+
+.monitor-method.method-put {
+    background: #f59e0b;
+    color: white;
+}
+
+.monitor-method.method-delete {
+    background: #ef4444;
+    color: white;
+}
+
+.monitor-method.method-patch {
+    background: #8b5cf6;
+    color: white;
+}
+
+.monitor-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.monitor-tag {
+    padding: 4px 10px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+body.dark-mode .monitor-tag {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
 }
 
 /* 可用率圆形显示 */
@@ -739,8 +1289,8 @@ body.dark-mode .dropdown-item:hover {
 }
 
 .uptime-circle {
-    width: 38px;
-    height: 38px;
+    width: 32px;
+    height: 32px;
     position: relative;
 }
 
@@ -753,12 +1303,12 @@ body.dark-mode .dropdown-item:hover {
 .circle-bg {
     fill: none;
     stroke: #e5e7eb;
-    stroke-width: 3;
+    stroke-width: 2.5;
 }
 
 .circle-progress {
     fill: none;
-    stroke-width: 3;
+    stroke-width: 2.5;
     stroke-linecap: round;
     transition: stroke-dasharray 0.3s ease;
 }
@@ -766,36 +1316,94 @@ body.dark-mode .dropdown-item:hover {
 .uptime-percent {
     font-size: 15px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: #6b7280;
 }
 
-/* 响应时间信息 */
+/* 响应时间信息 - 包含延迟信息和状态图例在同一行 */
 .response-info {
-    margin-bottom: 10px;
-    font-size: 13px;
+    margin-bottom: 8px;  /* 减小下边距 */
+    font-size: 14px;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
+    justify-content: space-between;  /* 两端对齐：延迟信息左边，状态标签右边 */
+    gap: 12px;  /* 两组之间的空隙 */
+}
+
+/* 延迟指标组 */
+.delay-metrics {
+    display: flex;
+    align-items: center;
+    gap: 3px;  /* 指标之间的小间距 */
+}
+
+/* 状态标签组 */
+.status-labels {
+    display: flex;
+    align-items: center;
+    gap: 3px;  /* 标签之间的小间距 */
 }
 
 .response-label {
-    font-weight: 600;
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 8px;  /* 小标签 */
+    letter-spacing: 0px;
 }
 
 .response-value {
     font-weight: 500;
+    font-size: 10px;  /* 小数值 */
     color: var(--text-primary);
+}
+
+/* 状态图例 */
+.status-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;  /* 减小间距让图例更紧凑 */
+    margin-bottom: 0;  /* 移除margin，由wrapper统一管理 */
+    font-size: 11px;  /* 减小字体 */
+    color: var(--text-secondary);
+    flex-shrink: 0;  /* 不压缩 */
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;  /* 进一步减小图标和文字间距 */
+    font-size: 10px;  /* 进一步缩小字体 */
+}
+
+.legend-dot {
+    width: 6px;  /* 缩小圆点 */
+    height: 6px;  /* 缩小圆点 */
+    border-radius: 50%;
+}
+
+.legend-dot.legend-online {
+    background: #10b981;
+}
+
+.legend-dot.legend-retry {
+    background: #f59e0b;
+}
+
+.legend-dot.legend-maintenance {
+    background: #3b82f6;  /* 蓝色 - 维护状态 */
+}
+
+.legend-dot.legend-offline {
+    background: #ef4444;
 }
 
 /* 状态条 */
 .status-bar {
     display: flex;
     gap: 2px;
-    height: 20px;
-    margin-bottom: 12px;
-    border-radius: 4px;
+    height: 24px;
+    margin-bottom: 8px;  /* 减小下边距，与趋势图更紧密 */
+    border-radius: 6px;
     overflow: hidden;
 }
 
@@ -835,56 +1443,83 @@ body.dark-mode .custom-tooltip {
 }
 
 .status-bar-item.up {
-    background: #10b981;
+    background: #10b981;  /* 绿色 - 在线 */
 }
 
 .status-bar-item.down {
-    background: #ef4444;
+    background: #ef4444;  /* 红色 - 离线 */
 }
 
 .status-bar-item.pending {
-    background: #f59e0b;
+    background: #f59e0b;  /* 橙色 - 待定 */
+}
+
+.status-bar-item.retry {
+    background: #f59e0b;  /* 橙色 - 重试中 */
 }
 
 .status-bar-item.maintenance {
-    background: #f59e0b;  /* 橙色 - 与维护图标保持一致 */
+    background: #3b82f6;  /* 蓝色 - 维护状态 */
 }
 
 /* 图表切换标签 */
 .chart-tabs {
     display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 12px;
+    background: #f3f4f6;
+    padding: 4px;
+    border-radius: 10px;
 }
 
 .chart-tabs button {
     flex: 1;
-    padding: 6px 10px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-secondary);
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    background: transparent;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
     color: var(--text-secondary);
 }
 
 .chart-tabs button:hover {
-    border-color: #10b981;
-    color: #10b981;
+    background: rgba(255, 255, 255, 0.5);
+    color: var(--text-primary);
 }
 
 .chart-tabs button.active {
-    background: #10b981;
-    color: white;
-    border-color: #10b981;
-    font-weight: 600;
+    background: white;
+    color: var(--text-primary);
+}
+
+/* 深色模式下的样式 */
+html.dark-mode .chart-tabs {
+    background: #1f2937;
+}
+
+html.dark-mode .chart-tabs button,
+body.dark-mode .chart-tabs button {
+    background: transparent;
+}
+
+html.dark-mode .chart-tabs button:hover,
+body.dark-mode .chart-tabs button:hover {
+    background: rgba(75, 85, 99, 0.5);
+}
+
+html.dark-mode .chart-tabs button.active,
+body.dark-mode .chart-tabs button.active {
+    background: #374151;
+    color: #e5e7eb;
 }
 
 /* 图表容器 */
 .chart-container {
     width: 100%;
-    height: 160px;
+    height: 180px;  /* 增加图表高度，让视觉更平衡 */
     border-radius: 8px;
 }
 
@@ -965,9 +1600,358 @@ body.dark-mode .custom-tooltip {
 }
 
 .footer a:hover {
-    color: #10b981;
+    color: #3b82f6;  /* 保持蓝色 - 减少绿色使用 */
 }
 
 .footer strong {
     color: inherit;
 }
+
+/* ==================== 维护公告和事件 ==================== */
+
+/* 事件公告 */
+.incident-alert {
+    margin: 20px 0;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border-left: 4px solid;
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
+    animation: slideDown 0.3s ease-out;
+}
+
+/* 信息样式 - 蓝色 */
+.incident-alert.incident-info {
+    border-left-color: #3b82f6;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+}
+
+.incident-alert.incident-info .incident-icon {
+    color: #3b82f6;
+}
+
+/* 警告样式 - 橙色 */
+.incident-alert.incident-warning {
+    border-left-color: #f59e0b;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%);
+}
+
+.incident-alert.incident-warning .incident-icon {
+    color: #f59e0b;
+}
+
+/* 危险样式 - 红色 */
+.incident-alert.incident-danger {
+    border-left-color: #ef4444;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.08) 100%);
+}
+
+.incident-alert.incident-danger .incident-icon {
+    color: #ef4444;
+}
+
+/* 主要样式 - 紫色 */
+.incident-alert.incident-primary {
+    border-left-color: #8b5cf6;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.incident-alert.incident-primary .incident-icon {
+    color: #8b5cf6;
+}
+
+/* 明亮样式 - 浅灰 */
+.incident-alert.incident-light {
+    border-left-color: #94a3b8;
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(148, 163, 184, 0.08) 100%);
+}
+
+.incident-alert.incident-light .incident-icon {
+    color: #64748b;
+}
+
+/* 黑暗样式 - 深灰 */
+.incident-alert.incident-dark {
+    border-left-color: #1e293b;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.15) 0%, rgba(30, 41, 59, 0.08) 100%);
+}
+
+.incident-alert.incident-dark .incident-icon {
+    color: #1e293b;
+}
+
+/* 深色模式下的调整 */
+html.dark-mode .incident-alert.incident-light {
+    border-left-color: #94a3b8;
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.2) 0%, rgba(148, 163, 184, 0.1) 100%);
+}
+
+html.dark-mode .incident-alert.incident-dark {
+    border-left-color: #94a3b8;
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.2) 0%, rgba(148, 163, 184, 0.1) 100%);
+}
+
+.incident-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    position: relative;
+}
+
+/* 折叠按钮 */
+.collapse-toggle {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.collapse-toggle:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+}
+
+html.dark-mode .collapse-toggle {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+html.dark-mode .collapse-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.collapse-toggle svg {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.3s ease;
+}
+
+/* 折叠状态样式 */
+.incident-alert.collapsed .incident-content,
+.maintenance-alert.collapsed > div:not(.maintenance-header) {
+    display: none;
+}
+
+.incident-alert.collapsed,
+.maintenance-alert.collapsed {
+    margin-bottom: 8px;
+}
+
+.incident-alert.collapsed .incident-header,
+.maintenance-alert.collapsed .maintenance-header {
+    margin-bottom: 0;
+}
+
+.incident-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.incident-alert.incident-info .incident-icon {
+    color: #3b82f6;
+}
+
+.incident-alert.incident-warning .incident-icon {
+    color: #f59e0b;
+}
+
+.incident-alert.incident-danger .incident-icon {
+    color: #ef4444;
+}
+
+.incident-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.incident-title {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.incident-date {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.incident-content {
+    padding-left: 36px;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.incident-content p {
+    margin: 0;
+}
+
+.incident-content h1,
+.incident-content h2,
+.incident-content h3 {
+    margin: 12px 0 8px 0;
+    color: var(--text-primary);
+}
+
+.incident-content code {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+html.dark-mode .incident-content code {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.incident-content a {
+    color: #3b82f6;
+    text-decoration: none;
+}
+
+.incident-content a:hover {
+    text-decoration: underline;
+}
+
+/* 内容更新时间戳 */
+.content-timestamp {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.content-timestamp svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* 维护公告 */
+.maintenance-alerts {
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.maintenance-alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(139, 92, 246, 0.03) 100%);
+    box-shadow: var(--shadow-sm);
+    animation: slideDown 0.3s ease-out;
+}
+
+.maintenance-alert.maintenance-active {
+    border-color: rgba(139, 92, 246, 0.4);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.maintenance-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    position: relative;
+}
+
+.maintenance-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: #8b5cf6;
+}
+
+.maintenance-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.maintenance-title {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.maintenance-status {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    font-weight: 500;
+}
+
+.maintenance-alert.maintenance-active .maintenance-status {
+    background: #8b5cf6;
+    color: white;
+}
+
+.maintenance-time {
+    padding-left: 30px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.maintenance-description {
+    padding-left: 30px;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.maintenance-description p {
+    margin: 0;
+}
+
+.maintenance-description code {
+    background: rgba(139, 92, 246, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.maintenance-description a {
+    color: #8b5cf6;
+    text-decoration: none;
+}
+
+.maintenance-description a:hover {
+    text-decoration: underline;
+}
+
+/* 动画 */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+

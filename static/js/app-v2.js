@@ -5,13 +5,19 @@ const i18n = {
     zh: {
         // 状态
         allServices: '全部服务',
+        allSystemsOperational: '所有系统正常运行',
+        partialOutage: '部分服务异常',
+        majorOutage: '系统故障',
         online: '在线',
         offline: '离线',
         down: '离线',
         someServicesDown: '部分服务异常',
         maintenance: '维护中',
+        underMaintenance: '维护中',
         retry: '重试中',
         normal: '正常',
+        avgUptime: '可用率',
+        avgResponse: '响应',
         
         // 统计
         uptime: '可用性',
@@ -66,17 +72,22 @@ const i18n = {
     en: {
         // Status
         allServices: 'All Services',
+        allSystemsOperational: 'All Systems Operational',
+        partialOutage: 'Partial Outage',
+        majorOutage: 'Major Outage',
         online: 'Online',
         offline: 'Offline',
         down: 'Down',
         someServicesDown: 'Some Services Down',
-        maintenance: 'Maintenance',
+        maintenance: 'Maint.',
+        underMaintenance: 'Under Maintenance',
         retry: 'Retry',
         normal: 'Normal',
         
         // Statistics
         uptime: 'Uptime',
-        avgResponse: 'Avg Response',
+        avgUptime: 'Uptime',
+        avgResponse: 'Response',
         currentResponse: 'Current',
         maxResponse: 'Max Response',
         
@@ -144,15 +155,27 @@ const app = createApp({
             showThemeMenu: false, // 显示主题菜单
             showLanguageMenu: false, // 显示语言菜单
             charts: {},
+            chartObserver: null, // Intersection Observer 用于图表懒加载
+            visibleCharts: new Set(), // 记录已进入视口的图表
+            searchDebounceTimer: null, // 搜索防抖计时器
             refreshInterval: null,
             countdownInterval: null,
+            autoRefreshSeconds: 60, // 前端1分钟倒计时触发后端采集
             historyCacheTTL: 300000, // 前端缓存5分钟(300秒)，避免频繁请求
             tooltip: {
                 show: false,
                 text: '',
                 x: 0,
                 y: 0
-            }
+            },
+            // 维护公告和事件
+            maintenances: [],
+            currentMaintenances: [],
+            activeIncident: null,
+            config: null,
+            // 折叠状态
+            incidentExpanded: false, // 事件通知默认折叠
+            maintenanceExpanded: [] // 维护通知展开状态数组
         };
     },
     computed: {
@@ -200,6 +223,38 @@ const app = createApp({
         // 翻译文本
         t() {
             return i18n[this.language] || i18n.zh;
+        },
+        
+        // 系统整体状态
+        systemStatus() {
+            if (!this.stats) return 'operational';
+            
+            // 如果有离线或重试中的服务，显示warning状态(橙色)
+            if (this.stats.downMonitors > 0 || this.stats.retryMonitors > 0) {
+                return 'warning';
+            }
+            
+            return 'operational'; // 全部正常(绿色)
+        },
+        
+        // 维护中的服务数量
+        maintenanceCount() {
+            return this.currentMaintenances.filter(m => 
+                m.status === 'under-maintenance'
+            ).length;
+        },
+        
+        // 进度条百分比 (从100%递减到0%)
+        progressPercent() {
+            return (this.countdown / this.autoRefreshSeconds) * 100;
+        },
+        
+        // 进度条颜色 - 根据剩余时间百分比动态变化
+        progressColor() {
+            const percent = this.progressPercent;
+            if (percent > 66) return '#10b981'; // 绿色 - 时间充足
+            if (percent > 33) return '#f59e0b'; // 橙色 - 时间过半
+            return '#ef4444'; // 红色 - 即将结束
         }
     },
     mounted() {
@@ -232,19 +287,156 @@ const app = createApp({
             this.language = savedLanguage;
         }
         
+        // 初始化 Intersection Observer 用于图表懒加载
+        this.initChartObserver();
+        
+        // 清理旧缓存
+        this.cleanOldCaches();
+        
+        // 恢复倒计时状态(从详情页返回时)
+        const savedCountdown = sessionStorage.getItem('mainPageCountdown');
+        const savedPaused = sessionStorage.getItem('mainPagePaused');
+        const savedTimestamp = sessionStorage.getItem('mainPageTimestamp');
+        
+        if (savedCountdown !== null && savedTimestamp !== null) {
+            const elapsed = Math.floor((Date.now() - parseInt(savedTimestamp)) / 1000);
+            const restoredCountdown = Math.max(0, parseInt(savedCountdown) - elapsed);
+            this.countdown = restoredCountdown > 0 ? restoredCountdown : this.autoRefreshSeconds;
+            logger.info(`📍 [详情页→主页] 从详情页返回主页`);
+            logger.info(`🔄 [详情页→主页] 恢复倒计时: ${savedCountdown}秒 → ${this.countdown}秒 (在详情页期间经过了${elapsed}秒)`);
+            
+            // 如果在详情页期间倒计时已归零,立即触发一次采集
+            if (restoredCountdown === 0) {
+                logger.info('⏰ [详情页→主页] 倒计时在详情页期间已归零,将立即触发采集');
+            }
+            
+            // 标记为非首次加载,防止fetchData()重置倒计时
+            this.isInitialLoad = false;
+        } else {
+            logger.info('📍 [主页] 首次进入主页');
+            // 标记为首次加载
+            this.triggerSource = 'initial';
+        }
+        
+        if (savedPaused !== null) {
+            this.paused = savedPaused === 'true';
+            if (this.paused) {
+                logger.info('⏸️ [主页] 恢复暂停状态');
+            }
+        }
+        
+        logger.info('🚀 [主页] 开始初始化数据加载...');
         this.fetchData();
         this.startAutoRefresh();
     },
     beforeUnmount() {
+        // 注意: 由于跳转详情页使用 window.location.href,此钩子不会被触发
+        // 倒计时状态保存已移至 goToDetail() 方法中
+        
         this.stopAutoRefresh();
+        // 清理 Intersection Observer
+        if (this.chartObserver) {
+            this.chartObserver.disconnect();
+        }
+        // 销毁所有图表实例
+        Object.values(this.charts).forEach(chart => {
+            if (chart) chart.dispose();
+        });
     },
     methods: {
+        // 初始化图表懒加载观察器
+        initChartObserver() {
+            // 如果浏览器不支持 IntersectionObserver，则跳过
+            if (!('IntersectionObserver' in window)) {
+                logger.warn('浏览器不支持 IntersectionObserver，图表懒加载功能已禁用');
+                return;
+            }
+            
+            // 配置观察器：当卡片进入视口时触发
+            const options = {
+                root: null, // 使用视口作为根元素
+                rootMargin: '100px', // 提前 100px 开始加载，提升体验
+                threshold: 0.1 // 当 10% 可见时触发
+            };
+            
+            this.chartObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        // 卡片进入视口
+                        const cardEl = entry.target;
+                        const monitorId = parseInt(cardEl.dataset.monitorId);
+                        
+                        // 如果图表还未渲染且不在精简模式下
+                        if (!this.compactMode && !this.visibleCharts.has(monitorId)) {
+                            this.visibleCharts.add(monitorId);
+                            
+                            // 延迟一小段时间再渲染，避免同时渲染太多图表
+                            setTimeout(() => {
+                                const monitor = this.monitors.find(m => m.id === monitorId);
+                                if (monitor && monitor.statusHistory && monitor.statusHistory.length > 0) {
+                                    this.renderChart(monitor);
+                                }
+                            }, 50);
+                        }
+                    }
+                });
+            }, options);
+        },
+        
+        // 观察所有监控卡片
+        observeMonitorCards() {
+            if (!this.chartObserver) return;
+            
+            // 等待 DOM 更新后再观察
+            this.$nextTick(() => {
+                const cards = document.querySelectorAll('.monitor-card');
+                cards.forEach(card => {
+                    this.chartObserver.observe(card);
+                });
+            });
+        },
+        
         // 获取数据
-        async fetchData() {
-            if (this.paused) return;
+        // forceRefresh: true = 手动刷新，强制获取新数据并更新缓存
+        // forceRefresh: false = 自动刷新，比较数据差异后更新缓存
+        async fetchData(forceRefresh = false) {
+            if (this.paused && !forceRefresh) return;
+            
+            const refreshType = forceRefresh ? '手动刷新' : '自动刷新';
+            logger.info(`📊 [主页-${refreshType}] 开始获取数据...`);
             
             try {
-                // 只在首次加载时显示 loading 状态
+                // 手动刷新时，先触发后端立即采集Kuma数据
+                if (forceRefresh) {
+                    this.loading = true;  // 手动刷新时显示loading状态
+                    logger.info('🔴 [主页-手动刷新] 用户点击刷新按钮,触发后端立即采集Kuma数据');
+                    try {
+                        const startTime = Date.now();
+                        await axios.post('/api/trigger-fetch?source=manual');
+                        logger.info(`✅ [主页-手动刷新] 已通知后端采集数据 (耗时: ${Date.now() - startTime}ms)`);
+                        // 等待1秒让后端完成采集
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (err) {
+                        logger.error('❌ [主页-手动刷新] 触发后端采集失败:', err);
+                    }
+                } else if (this.isInitialLoad && this.triggerSource === 'initial') {
+                    // 首次加载时触发采集
+                    this.loading = true;
+                    logger.info('🟢 [主页-首次加载] 触发后端立即采集Kuma数据');
+                    try {
+                        const startTime = Date.now();
+                        await axios.post('/api/trigger-fetch?source=initial');
+                        logger.info(`✅ [主页-首次加载] 已通知后端采集数据 (耗时: ${Date.now() - startTime}ms)`);
+                        // 等待1秒让后端完成采集
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        // 清除标记
+                        delete this.triggerSource;
+                    } catch (err) {
+                        logger.error('❌ [主页-首次加载] 触发后端采集失败:', err);
+                    }
+                }
+                
+                // 首次加载时显示 loading 状态
                 if (this.isInitialLoad) {
                     this.loading = true;
                 }
@@ -256,13 +448,47 @@ const app = createApp({
                     this.monitors = monitorsRes.data.data;
                     
                     // 为每个监控项获取历史数据
-                    await this.fetchAllHistory();
+                    await this.fetchAllHistory(forceRefresh);
                 }
 
                 // 获取统计信息
                 const statsRes = await axios.get('/api/stats');
                 if (statsRes.data.success) {
                     this.stats = statsRes.data.data;
+                }
+
+                // 获取配置（仅首次加载）
+                if (!this.config) {
+                    try {
+                        const configRes = await axios.get('/api/config');
+                        if (configRes.data.success) {
+                            this.config = configRes.data.config;
+                        }
+                    } catch (err) {
+                        logger.warn('获取配置失败:', err);
+                    }
+                }
+
+                // 获取当前维护公告
+                try {
+                    const maintenancesRes = await axios.get('/api/maintenances/current');
+                    if (maintenancesRes.data.success) {
+                        this.currentMaintenances = maintenancesRes.data.maintenances || [];
+                        // 初始化维护通知展开状态数组（默认折叠）
+                        this.maintenanceExpanded = this.currentMaintenances.map(() => false);
+                    }
+                } catch (err) {
+                    logger.warn('获取维护公告失败:', err);
+                }
+
+                // 获取活跃事件
+                try {
+                    const incidentRes = await axios.get('/api/incidents/active');
+                    if (incidentRes.data.success) {
+                        this.activeIncident = incidentRes.data.incident;
+                    }
+                } catch (err) {
+                    logger.warn('获取事件失败:', err);
                 }
 
                 // 使用 24 小时制格式
@@ -278,26 +504,35 @@ const app = createApp({
                 });
                 
                 if (this.isInitialLoad) {
-                    this.loading = false;
                     this.isInitialLoad = false;
                     
-                    // 首次加载完成后，渲染所有图表
-                    if (!this.compactMode) {
-                        this.$nextTick(() => {
-                            this.monitors.forEach(monitor => {
-                                if (monitor.statusHistory && monitor.statusHistory.length > 0) {
-                                    this.renderChart(monitor);
-                                }
-                            });
-                        });
-                    }
+                    // 仅在首次加载时重置倒计时
+                    this.countdown = this.autoRefreshSeconds;
+                } else {
+                    // 从详情页返回或自动刷新时,也要确保图表懒加载观察器已初始化
+                    logger.info('🔄 [主页] 非首次加载,检查图表懒加载观察器状态');
                 }
-                this.countdown = 60;
+                
+                // 数据加载完成后,启用图表懒加载观察器（包括从详情页返回的情况）
+                if (!this.compactMode && this.chartObserver) {
+                    this.$nextTick(() => {
+                        this.observeMonitorCards();
+                        logger.info('📊 [主页] 已启用图表懒加载观察器');
+                    });
+                }
+                
+                // 手动刷新时重置倒计时
+                if (forceRefresh) {
+                    this.countdown = this.autoRefreshSeconds;
+                }
+                
+                // 完成后总是重置loading状态
+                this.loading = false;
             } catch (err) {
                 this.error = '获取数据失败: ' + (err.message || '未知错误');
                 this.loading = false;
                 this.isInitialLoad = false;
-                console.error('Fetch error:', err);
+                logger.error('Fetch error:', err);
             }
         },
 
@@ -314,12 +549,18 @@ const app = createApp({
                 // 检查缓存是否过期
                 if (now - timestamp > this.historyCacheTTL) {
                     localStorage.removeItem(cacheKey);
+                    logger.info(`清理过期缓存: ${cacheKey}, 年龄: ${Math.floor((now - timestamp) / 1000)}秒`);
                     return null;
                 }
                 
                 return { data, timestamp };
             } catch (err) {
-                console.error('Failed to get cache:', err);
+                logger.error('Failed to get cache:', err);
+                // 缓存损坏，清理它
+                try {
+                    const cacheKey = `history_cache_${monitorId}_${cacheType}`;
+                    localStorage.removeItem(cacheKey);
+                } catch (e) {}
                 return null;
             }
         },
@@ -327,120 +568,284 @@ const app = createApp({
         setHistoryCache(monitorId, data, cacheType = 'limit_100') {
             try {
                 const cacheKey = `history_cache_${monitorId}_${cacheType}`;
+                
+                // 限制缓存数据量：只缓存最近的100条记录
+                const limitedData = data.slice(-100);
+                
                 const cacheData = {
-                    data: data,
-                    timestamp: Date.now()
+                    data: limitedData,
+                    timestamp: Date.now(),
+                    count: limitedData.length
                 };
-                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                
+                const cacheString = JSON.stringify(cacheData);
+                
+                // 检查缓存大小，如果超过100KB，不缓存
+                if (cacheString.length > 100 * 1024) {
+                    logger.warn(`缓存数据过大(${Math.floor(cacheString.length / 1024)}KB)，跳过缓存: ${cacheKey}`);
+                    return;
+                }
+                
+                localStorage.setItem(cacheKey, cacheString);
             } catch (err) {
-                console.error('Failed to set cache:', err);
+                // localStorage满了，清理旧缓存
+                if (err.name === 'QuotaExceededError') {
+                    logger.warn('localStorage已满，清理旧缓存...');
+                    this.cleanOldCaches();
+                    // 重试一次
+                    try {
+                        const cacheKey = `history_cache_${monitorId}_${cacheType}`;
+                        const limitedData = data.slice(-100);
+                        const cacheData = {
+                            data: limitedData,
+                            timestamp: Date.now(),
+                            count: limitedData.length
+                        };
+                        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                    } catch (retryErr) {
+                        logger.error('重试缓存失败:', retryErr);
+                    }
+                } else {
+                    logger.error('Failed to set cache:', err);
+                }
+            }
+        },
+        
+        // 清理旧缓存
+        cleanOldCaches() {
+            try {
+                const now = Date.now();
+                const keysToRemove = [];
+                
+                // 遍历所有localStorage key
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('history_cache_')) {
+                        try {
+                            const cached = localStorage.getItem(key);
+                            if (cached) {
+                                const { timestamp } = JSON.parse(cached);
+                                // 清理超过TTL的缓存
+                                if (now - timestamp > this.historyCacheTTL) {
+                                    keysToRemove.push(key);
+                                }
+                            }
+                        } catch (err) {
+                            // 解析失败，标记删除
+                            keysToRemove.push(key);
+                        }
+                    }
+                }
+                
+                // 删除过期缓存
+                keysToRemove.forEach(key => {
+                    localStorage.removeItem(key);
+                    logger.info(`清理缓存: ${key}`);
+                });
+                
+                if (keysToRemove.length > 0) {
+                    logger.info(`已清理 ${keysToRemove.length} 个过期缓存`);
+                }
+            } catch (err) {
+                logger.error('Failed to clean caches:', err);
             }
         },
 
         // 获取所有监控项的历史数据（优化：使用批量查询API）
-        async fetchAllHistory() {
+        // forceRefresh: true = 强制刷新，忽略缓存直接获取新数据
+        // forceRefresh: false = 自动刷新，优先使用缓存，然后后台更新
+        async fetchAllHistory(forceRefresh = false) {
             const monitors = this.monitors;
             
-            // 先检查哪些监控项有缓存
-            const needFetch = [];
-            monitors.forEach(monitor => {
-                const cached = this.getHistoryCache(monitor.id);
-                if (cached) {
-                    // 使用缓存数据
-                    monitor.statusHistory = cached.data.slice(-100);
-                    // 获取最后一次响应时间
-                    if (cached.data.length > 0) {
-                        const lastData = cached.data[cached.data.length - 1];
-                        monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
+            if (forceRefresh) {
+                // 手动刷新：强制获取所有数据
+                const allMonitorIds = monitors.map(m => m.id);
+                await this.fetchAndUpdateCache(monitors, allMonitorIds, true);
+            } else {
+                // 自动刷新：先使用缓存，然后后台更新
+                const needFetch = [];
+                const cachedMonitors = [];
+                monitors.forEach(monitor => {
+                    const cached = this.getHistoryCache(monitor.id);
+                    if (cached) {
+                        // 使用缓存数据
+                        this.applyHistoryData(monitor, cached.data);
+                        cachedMonitors.push(monitor);
+                        logger.info(`📦 使用缓存数据: 监控 ${monitor.name}`);
+                    } else {
+                        needFetch.push(monitor.id);
                     }
-                    // 计算平均响应时间
-                    const validResponses = cached.data.filter(item => item.status === 1);
-                    if (validResponses.length > 0) {
-                        const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
-                        monitor.avgResponseTime = Math.round(sum / validResponses.length);
-                    }
-                    
-                    // 缓存命中,立即渲染图表(非精简模式)
-                    if (!this.compactMode && !this.isInitialLoad) {
-                        this.$nextTick(() => {
-                            this.renderChart(monitor);
-                        });
-                    }
-                } else {
-                    needFetch.push(monitor.id);
+                });
+                
+                // 使用缓存数据后,标记数据已就绪
+                // 实际的图表渲染将由懒加载观察器在 DOM 渲染完成后自动触发
+                if (cachedMonitors.length > 0) {
+                    logger.info(`📦 已应用 ${cachedMonitors.length} 个监控项的缓存数据,等待图表懒加载渲染`);
                 }
-            });
+                
+                // 后台获取所有数据，比较差异后更新缓存
+                const allMonitorIds = monitors.map(m => m.id);
+                await this.fetchAndUpdateCache(monitors, allMonitorIds, false);
+            }
+        },
+        
+        // 应用历史数据到监控项
+        applyHistoryData(monitor, historyData) {
+            // 使用Vue 3的方式更新数组,确保响应式
+            monitor.statusHistory = historyData.slice(-100);
             
-            // 如果有需要获取的数据，使用批量API
-            if (needFetch.length > 0) {
-                try {
-                    const res = await axios.post('/api/monitors/batch-history', {
-                        monitorIds: needFetch,
-                        limit: 100
-                    });
-                    
-                    if (res.data.success) {
-                        res.data.data.forEach(result => {
-                            const monitor = monitors.find(m => m.id === result.monitorId);
-                            if (monitor && result.heartbeats && result.heartbeats.length > 0) {
+            // 获取最后一次心跳数据
+            if (historyData.length > 0) {
+                const lastData = historyData[historyData.length - 1];
+                
+                // 更新当前状态为最新心跳的状态
+                // 直接使用heartbeat的status值(0=离线, 1=在线/维护, 2=重试)
+                monitor.status = lastData.status;
+                monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
+            } else {
+                monitor.responseTime = null;
+            }
+            
+            // 计算平均响应时间
+            const validResponses = historyData.filter(item => item.status === 1);
+            if (validResponses.length > 0) {
+                const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
+                monitor.avgResponseTime = Math.round(sum / validResponses.length);
+            } else {
+                monitor.avgResponseTime = 0;
+            }
+        },
+        
+        // 比较两个历史数据数组是否有差异
+        hasHistoryChanged(oldData, newData) {
+            if (!oldData || oldData.length !== newData.length) return true;
+            
+            // 比较最后5条数据的关键字段
+            const compareCount = Math.min(5, newData.length);
+            for (let i = 1; i <= compareCount; i++) {
+                const oldItem = oldData[oldData.length - i];
+                const newItem = newData[newData.length - i];
+                
+                if (!oldItem || !newItem) return true;
+                if (oldItem.status !== newItem.status) return true;
+                if (oldItem.responseTime !== newItem.responseTime) return true;
+                // 比较时间戳(精确到秒)
+                const oldTime = new Date(oldItem.createdAt).getTime() / 1000;
+                const newTime = new Date(newItem.createdAt).getTime() / 1000;
+                if (Math.abs(oldTime - newTime) > 1) return true;
+            }
+            
+            return false;
+        },
+        
+        // 获取数据并更新缓存
+        async fetchAndUpdateCache(monitors, monitorIds, forceUpdate = false) {
+            if (monitorIds.length === 0) return;
+            
+            let updatedCount = 0;
+            
+            try {
+                const res = await axios.post('/api/monitors/batch-history', {
+                    monitorIds: monitorIds,
+                    limit: 100
+                });
+                
+                if (res.data.success) {
+                    res.data.data.forEach(result => {
+                        const monitor = monitors.find(m => m.id === result.monitorId);
+                        if (monitor && result.heartbeats && result.heartbeats.length > 0) {
+                            const newData = result.heartbeats;
+                            const cached = this.getHistoryCache(monitor.id);
+                            const oldData = cached ? cached.data : null;
+                            
+                            // 判断是否需要更新缓存和界面
+                            if (forceUpdate || this.hasHistoryChanged(oldData, newData)) {
                                 // 更新 localStorage 缓存
-                                this.setHistoryCache(monitor.id, result.heartbeats);
+                                this.setHistoryCache(monitor.id, newData);
                                 
-                                monitor.statusHistory = result.heartbeats.slice(-100);
-                                // 获取最后一次响应时间
-                                const lastData = result.heartbeats[result.heartbeats.length - 1];
-                                monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
-                                // 计算平均响应时间
-                                const validResponses = result.heartbeats.filter(item => item.status === 1);
-                                if (validResponses.length > 0) {
-                                    const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
-                                    monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                                // 应用数据到界面 - 使用 Vue.set 确保响应式更新
+                                this.applyHistoryData(monitor, newData);
+                                
+                                // 强制触发Vue响应式更新
+                                // 通过修改monitors数组来触发重新渲染
+                                const index = this.monitors.findIndex(m => m.id === monitor.id);
+                                if (index !== -1) {
+                                    // 创建一个新对象以确保Vue检测到变化
+                                    this.monitors.splice(index, 1, { ...monitor });
                                 }
                                 
-                                // 请求完成后立即渲染图表(非精简模式)
-                                if (!this.compactMode && !this.isInitialLoad) {
+                                // 只重新渲染已经可见的图表（已被懒加载渲染过的）
+                                // 其他图表会在滚动到可见区域时由懒加载观察器渲染
+                                if (!this.compactMode && this.visibleCharts.has(monitor.id)) {
                                     this.$nextTick(() => {
                                         this.renderChart(monitor);
                                     });
                                 }
-                            } else if (monitor) {
-                                monitor.statusHistory = [];
-                            }
-                        });
-                    }
-                } catch (err) {
-                    console.error('Failed to fetch batch history:', err);
-                    // 失败时使用单个请求作为降级方案
-                    for (const monitorId of needFetch) {
-                        try {
-                            const monitor = monitors.find(m => m.id === monitorId);
-                            const res = await axios.get(`/api/monitors/${monitorId}/history?limit=100`);
-                            if (res.data.success && res.data.data.length > 0) {
-                                this.setHistoryCache(monitorId, res.data.data);
-                                monitor.statusHistory = res.data.data.slice(-100);
-                                // 获取最后一次响应时间
-                                const lastData = res.data.data[res.data.data.length - 1];
-                                monitor.responseTime = lastData.status === 1 ? lastData.responseTime : null;
-                                const validResponses = res.data.data.filter(item => item.status === 1);
-                                if (validResponses.length > 0) {
-                                    const sum = validResponses.reduce((acc, item) => acc + item.responseTime, 0);
-                                    monitor.avgResponseTime = Math.round(sum / validResponses.length);
+                                
+                                updatedCount++;
+                                
+                                if (forceUpdate) {
+                                    logger.info(`🔄 强制更新监控 ${monitor.name} 的数据`);
+                                } else {
+                                    logger.info(`🔄 检测到监控 ${monitor.name} 数据变化，已更新`);
                                 }
                             }
-                        } catch (err2) {
-                            console.error(`Failed to fetch history for monitor ${monitorId}:`, err2);
+                        } else if (monitor) {
+                            monitor.statusHistory = [];
                         }
+                    });
+                    
+                    // 打印更新统计
+                    if (updatedCount > 0) {
+                        logger.info(`✅ 批量更新完成: 共更新 ${updatedCount}/${monitorIds.length} 个监控项的数据并触发重新渲染`);
+                    } else {
+                        logger.info(`ℹ️  批量检查完成: 所有监控项数据无变化,未触发重新渲染`);
                     }
                 }
-            }
-            
-            // 首次加载时统一渲染所有图表
-            if (this.isInitialLoad) {
-                this.$nextTick(() => {
-                    setTimeout(() => {
-                        this.renderAllCharts();
-                    }, 300);
-                });
+            } catch (err) {
+                logger.error('❌ 批量获取历史数据失败:', err);
+                // 失败时使用单个请求作为降级方案
+                logger.info('🔄 切换到单个请求降级方案...');
+                for (const monitorId of monitorIds) {
+                    try {
+                        const monitor = monitors.find(m => m.id === monitorId);
+                        if (!monitor) continue;
+                        
+                        const res = await axios.get(`/api/monitors/${monitorId}/history?limit=100`);
+                        if (res.data.success && res.data.data.length > 0) {
+                            const newData = res.data.data;
+                            const cached = this.getHistoryCache(monitorId);
+                            const oldData = cached ? cached.data : null;
+                            
+                            if (forceUpdate || this.hasHistoryChanged(oldData, newData)) {
+                                this.setHistoryCache(monitorId, newData);
+                                this.applyHistoryData(monitor, newData);
+                                
+                                // 强制触发Vue响应式更新
+                                const index = this.monitors.findIndex(m => m.id === monitor.id);
+                                if (index !== -1) {
+                                    this.monitors.splice(index, 1, { ...monitor });
+                                }
+                                
+                                // 重新渲染图表（无论图表是否已存在）
+                                if (!this.compactMode) {
+                                    this.$nextTick(() => {
+                                        this.renderChart(monitor);
+                                    });
+                                }
+                                
+                                updatedCount++;
+                                logger.info(`🔄 降级方案: 更新监控 ${monitor.name} 的数据并重新渲染图表`);
+                            }
+                        }
+                    } catch (err2) {
+                        logger.error(`❌ 降级方案失败 - 监控项 ${monitorId}:`, err2);
+                    }
+                }
+                
+                if (updatedCount > 0) {
+                    logger.info(`✅ 降级方案完成: 共更新 ${updatedCount}/${monitorIds.length} 个监控项`);
+                }
             }
         },
 
@@ -453,6 +858,8 @@ const app = createApp({
 
         // 获取平均响应时间
         getAvgResponseTime(monitor) {
+            // 维护状态(responseTime为null)时返回null
+            if (monitor.responseTime == null) return null;
             const data = this.getDisplayHistory(monitor);
             if (!data.length) return 0;
             const validTimes = data.filter(d => d.status === 1).map(d => d.responseTime);
@@ -463,6 +870,8 @@ const app = createApp({
 
         // 获取最大响应时间
         getMaxResponseTime(monitor) {
+            // 维护状态(responseTime为null)时返回null
+            if (monitor.responseTime == null) return null;
             const data = this.getDisplayHistory(monitor);
             if (!data.length) return 0;
             const validTimes = data.filter(d => d.status === 1).map(d => d.responseTime);
@@ -507,15 +916,15 @@ const app = createApp({
         renderChart(monitor) {
             const chartEl = document.getElementById('chart-' + monitor.id);
             if (!chartEl) {
-                console.warn(`图表容器不存在: chart-${monitor.id}`);
+                logger.warn(`图表容器不存在: chart-${monitor.id}`);
                 return;
             }
             if (!monitor.statusHistory) {
-                console.warn(`监控 ${monitor.id} 没有历史数据`);
+                logger.warn(`监控 ${monitor.id} 没有历史数据`);
                 return;
             }
             if (monitor.statusHistory.length === 0) {
-                console.warn(`监控 ${monitor.id} 历史数据为空`);
+                logger.warn(`监控 ${monitor.id} 历史数据为空`);
                 return;
             }
 
@@ -604,39 +1013,44 @@ const app = createApp({
                 return nearestValue;
             });
 
-            // 构建 markArea 数据 - 标记维护和离线时段
+            // 构建 markArea 数据 - 标记维护、重试和离线时段
+            // 使用 getStatusBarClass 的相同逻辑判断实际状态
             const markAreas = [];
             let areaStart = null;
-            let areaStatus = null;
+            let areaDisplayStatus = null;
             
             data.forEach((item, index) => {
-                if (item.status !== 1) {
-                    // 离线或维护状态
+                // 判断实际显示状态: online, maintenance, retry, down
+                const displayStatus = this.getStatusBarClass(item);
+                const isOnline = displayStatus === 'up';
+                
+                if (!isOnline) {
+                    // 非在线状态 (maintenance/retry/down)
                     if (areaStart === null) {
                         // 开始新的区域
                         areaStart = index;
-                        areaStatus = item.status;
-                    } else if (areaStatus !== item.status) {
+                        areaDisplayStatus = displayStatus;
+                    } else if (areaDisplayStatus !== displayStatus) {
                         // 状态变化了,结束当前区域,开始新区域
                         markAreas.push({
-                            status: areaStatus,
+                            displayStatus: areaDisplayStatus,
                             start: areaStart,
                             end: index - 1
                         });
                         areaStart = index;
-                        areaStatus = item.status;
+                        areaDisplayStatus = displayStatus;
                     }
                 } else {
-                    // 正常状态
+                    // 在线状态
                     if (areaStart !== null) {
                         // 结束之前的区域
                         markAreas.push({
-                            status: areaStatus,
+                            displayStatus: areaDisplayStatus,
                             start: areaStart,
                             end: index - 1
                         });
                         areaStart = null;
-                        areaStatus = null;
+                        areaDisplayStatus = null;
                     }
                 }
             });
@@ -644,7 +1058,7 @@ const app = createApp({
             // 如果最后还有未结束的区域
             if (areaStart !== null) {
                 markAreas.push({
-                    status: areaStatus,
+                    displayStatus: areaDisplayStatus,
                     start: areaStart,
                     end: data.length - 1
                 });
@@ -675,11 +1089,19 @@ const app = createApp({
                 maxTime = maxTime + margin;
             }
 
-            // 构建 markArea 配置（显示离线/重试背景）
+            // 构建 markArea 配置（显示离线/维护/重试背景）
             const markAreaData = markAreas.map(area => {
-                const color = area.status === 2
-                    ? 'rgba(245, 158, 11, 0.3)'  // 橙色 - 重试中
-                    : 'rgba(239, 68, 68, 0.3)';   // 红色 - 离线
+                let color;
+                // 根据实际显示状态选择颜色
+                if (area.displayStatus === 'maintenance') {
+                    color = 'rgba(59, 130, 246, 0.15)';  // 蓝色 - 维护中
+                } else if (area.displayStatus === 'down') {
+                    color = 'rgba(239, 68, 68, 0.3)';    // 红色 - 离线
+                } else if (area.displayStatus === 'retry') {
+                    color = 'rgba(245, 158, 11, 0.3)';   // 橙色 - 重试中
+                } else {
+                    color = 'rgba(156, 163, 175, 0.3)';  // 灰色 - 其他
+                }
                 
                 // markArea 从 area.start 延伸到 area.end + 1，覆盖整个区域
                 return [
@@ -693,10 +1115,11 @@ const app = createApp({
             
             const option = {
                 grid: {
-                    left: '50px',
-                    right: '20px',
+                    left: '3px',
+                    right: '3px',
                     bottom: '30px',
-                    top: '20px'
+                    top: '10px',
+                    containLabel: true  // 包含标签,保证Y轴显示
                 },
                 xAxis: {
                     type: 'category',
@@ -764,11 +1187,20 @@ const app = createApp({
                         const statusLabel = this.language === 'zh' ? '状态' : 'Status';
                         const responseLabel = this.language === 'zh' ? '响应' : 'Response';
                         
-                        if (item.status === 1) {
-                            return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #10b981;">${t.normal}</span><br/>${responseLabel}: ${item.responseTime}ms</div>`;
-                        } else if (item.status === 2) {
+                        // status=1 且有响应时间: 在线
+                        if (item.status === 1 && item.responseTime !== null) {
+                            return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #10b981;">${t.online}</span><br/>${responseLabel}: ${item.responseTime}ms</div>`;
+                        }
+                        // status=1 但无响应时间: 维护中
+                        else if (item.status === 1 && item.responseTime === null) {
+                            return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #3b82f6;">${t.maintenance}</span></div>`;
+                        }
+                        // status=2: 重试中
+                        else if (item.status === 2) {
                             return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #f59e0b;">${t.retry}</span></div>`;
-                        } else {
+                        }
+                        // status=0: 离线
+                        else {
                             return `<div style="text-align: left;">${time}<br/>${statusLabel}: <span style="color: #ef4444;">${t.offline}</span></div>`;
                         }
                     }
@@ -805,7 +1237,7 @@ const app = createApp({
             chart.on('click', (params) => {
                 // 点击图表内部，不做跳转，tooltip已经显示了详细信息
                 // 如果需要，可以在这里添加其他交互逻辑
-                console.log('Chart point clicked:', params);
+                logger.info('Chart point clicked:', params);
             });
         },
 
@@ -822,6 +1254,14 @@ const app = createApp({
 
         // 跳转到详情页
         goToDetail(monitorId) {
+            // 在跳转前保存倒计时状态
+            sessionStorage.setItem('mainPageCountdown', this.countdown.toString());
+            sessionStorage.setItem('mainPagePaused', this.paused.toString());
+            sessionStorage.setItem('mainPageTimestamp', Date.now().toString());
+            logger.info(`💾 [主页→详情页] 跳转前保存倒计时状态: ${this.countdown}秒, 暂停: ${this.paused}`);
+            logger.info(`📍 [主页→详情页] 跳转到详情页,监控ID: ${monitorId}`);
+            logger.info('⏱️ [主页→详情页] 主页1分钟倒计时将在详情页后台继续运行');
+            
             window.location.href = `/detail.html?id=${monitorId}`;
         },
 
@@ -832,19 +1272,53 @@ const app = createApp({
             if (this.stats.downMonitors > 3) return 'error';
             return 'warning';
         },
-
-        // 获取状态图标类
-        getStatusIconClass(status) {
-            if (status === 1) return 'up';
-            if (status === 2) return 'maintenance';
-            return 'down';
+        
+        // 获取系统状态栏样式类
+        getSystemStatusClass() {
+            return 'status-' + this.systemStatus;
         },
 
-        // 获取状态条类
+        // 获取状态图标类
+        getStatusIconClass(status, responseTime) {
+            // 使用与 getStatusBarClass 相同的逻辑
+            if (status === 1) {
+                return responseTime != null ? 'up' : 'maintenance';
+            }
+            if (status === 2) return 'retry';
+            return 'down';
+        },
+        
+        // 获取监控类型标签
+        getMonitorTypeLabel(type) {
+            const typeLabels = {
+                'http': 'HTTP',
+                'https': 'HTTPS',
+                'tcp': 'TCP',
+                'port': 'TCP Port',
+                'ping': 'Ping/ICMP',
+                'dns': 'DNS',
+                'docker': 'Docker',
+                'keyword': 'Keyword',
+                'grpc': 'gRPC',
+                'push': 'Push'
+            };
+            return typeLabels[type] || type.toUpperCase();
+        },
+
+        // 获取状态条类（支持 4 种状态）
         getStatusBarClass(item) {
             const status = typeof item === 'object' ? item.status : item;
-            if (status === 1) return 'up';
-            if (status === 2) return 'maintenance';
+            const responseTime = typeof item === 'object' ? item.responseTime : null;
+            
+            // 4 种状态判断：
+            // status=1 且 responseTime 有值: 在线 (绿色)
+            // status=1 且 responseTime 无值: 维护中 (蓝色)
+            // status=2: 重试中 (橙色)
+            // status=0: 离线 (红色)
+            if (status === 1) {
+                return responseTime != null ? 'up' : 'maintenance';
+            }
+            if (status === 2) return 'retry';
             if (status === 0) return 'down';
             return 'pending';
         },
@@ -867,7 +1341,7 @@ const app = createApp({
             if (item.status === 1) {
                 return `${time} - ${t.normal} (${item.responseTime}ms)`;
             } else if (item.status === 2) {
-                return `${time} - ${t.retry}`;
+                return `${time} - ${t.maintenance}`;
             } else {
                 return `${time} - ${t.offline}`;
             }
@@ -893,8 +1367,20 @@ const app = createApp({
             return `${percent} 100`;
         },
 
-        // 获取可用率颜色
-        getUptimeColor(uptime) {
+        // 获取可用率颜色 - 根据服务状态返回颜色
+        getUptimeColor(monitor) {
+            // 优先根据服务状态返回颜色
+            if (monitor && monitor.status !== undefined) {
+                // 使用与 getStatusBarClass 相同的逻辑
+                if (monitor.status === 1) {
+                    // status=1 需要根据 responseTime 判断是在线还是维护
+                    return monitor.responseTime != null ? '#10b981' : '#3b82f6';
+                }
+                if (monitor.status === 2) return '#f59e0b'; // 橙色 - 重试中
+                if (monitor.status === 0) return '#ef4444'; // 红色 - 离线
+            }
+            // 兜底:根据可用率返回颜色
+            const uptime = monitor?.uptime || 0;
             const percent = uptime * 100;
             if (percent >= 99) return '#10b981'; // 绿色
             if (percent >= 95) return '#f59e0b'; // 橙色
@@ -916,19 +1402,38 @@ const app = createApp({
         startAutoRefresh() {
             this.stopAutoRefresh();
             
-            // 每60秒刷新数据
-            this.refreshInterval = setInterval(() => {
-                if (!this.paused) {
-                    this.fetchData();
-                }
-            }, 60000);
+            logger.info('🚀 [主页] 启动自动刷新机制: 每1分钟触发后端采集');
             
             // 每秒更新倒计时
-            this.countdownInterval = setInterval(() => {
+            this.countdownInterval = setInterval(async () => {
                 if (!this.paused && this.countdown > 0) {
                     this.countdown--;
+                    // 每10秒打印一次倒计时状态
+                    if (this.countdown % 10 === 0 && this.countdown > 0) {
+                        logger.info(`⏱️ [主页倒计时] 还有 ${this.countdown} 秒将触发后端采集`);
+                    }
                 } else if (!this.paused && this.countdown === 0) {
-                    this.countdown = 60;
+                    // 倒计时归零时触发后端采集
+                    logger.info('⏰ [主页] 1分钟倒计时结束,触发后端立即采集Kuma数据...');
+                    try {
+                        const startTime = Date.now();
+                        await axios.post('/api/trigger-fetch?source=countdown');
+                        logger.info(`✅ [主页] 已通知后端采集数据 (耗时: ${Date.now() - startTime}ms)`);
+                        
+                        // 等待1秒让后端完成采集
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                        // 刷新前端数据(自动刷新模式,会比对差异)
+                        logger.info('🔄 [主页] 开始刷新前端数据...');
+                        await this.fetchData(false);
+                        logger.info('✅ [主页] 前端数据刷新完成');
+                    } catch (err) {
+                        logger.error('❌ [主页] 触发后端采集失败:', err);
+                        // 失败时也尝试刷新前端数据
+                        await this.fetchData(false);
+                    }
+                    this.countdown = this.autoRefreshSeconds;
+                    logger.info(`♻️ [主页] 倒计时已重置为 ${this.autoRefreshSeconds} 秒`);
                 }
             }, 1000);
         },
@@ -952,30 +1457,49 @@ const app = createApp({
             // 保存到 localStorage
             localStorage.setItem('compactMode', this.compactMode);
             
-            // 如果切换到精简模式，销毁所有图表
+            // 如果切换到精简模式，销毁所有图表并停止观察
             if (this.compactMode) {
+                if (this.chartObserver) {
+                    this.chartObserver.disconnect();
+                }
                 Object.keys(this.charts).forEach(id => {
                     if (this.charts[id]) {
                         this.charts[id].dispose();
                     }
                 });
                 this.charts = {};
+                this.visibleCharts.clear();
             } else {
-                // 切换回完整模式，重新渲染图表
+                // 切换回完整模式，重新启用懒加载观察
                 this.$nextTick(() => {
-                    this.renderAllCharts();
+                    if (this.chartObserver) {
+                        this.observeMonitorCards();
+                    }
                 });
             }
         },
 
-        // 搜索输入处理
+        // 搜索输入处理（带防抖）
         onSearchInput() {
-            // 搜索时重新渲染图表
-            if (!this.compactMode) {
-                this.$nextTick(() => {
-                    this.renderAllCharts();
-                });
+            // 清除之前的计时器
+            if (this.searchDebounceTimer) {
+                clearTimeout(this.searchDebounceTimer);
             }
+            
+            // 设置新的计时器，300ms 后执行
+            this.searchDebounceTimer = setTimeout(() => {
+                // 搜索时重新观察卡片（因为 DOM 可能发生变化）
+                if (!this.compactMode && this.chartObserver) {
+                    // 先断开旧的观察
+                    this.chartObserver.disconnect();
+                    // 清空已见图表记录
+                    this.visibleCharts.clear();
+                    // 重新观察
+                    this.$nextTick(() => {
+                        this.observeMonitorCards();
+                    });
+                }
+            }, 300);
         },
 
         // 清除搜索
@@ -1079,6 +1603,87 @@ const app = createApp({
                 lineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb',
                 gridLineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb'
             };
+        },
+
+        // 格式化日期
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const locale = this.language === 'zh' ? 'zh-CN' : 'en-US';
+            return date.toLocaleString(locale, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        },
+
+        // 格式化日期范围
+        formatDateRange(startDate, endDate) {
+            if (!startDate) return '';
+            const locale = this.language === 'zh' ? 'zh-CN' : 'en-US';
+            const start = new Date(startDate);
+            const startStr = start.toLocaleString(locale, {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            
+            if (!endDate) return startStr + ' 开始';
+            
+            const end = new Date(endDate);
+            const endStr = end.toLocaleString(locale, {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            
+            return `${startStr} ~ ${endStr}`;
+        },
+
+        // 切换维护通知展开/收起
+        toggleMaintenance(index) {
+            // 使用 Vue.set 确保响应性
+            this.$set(this.maintenanceExpanded, index, !this.maintenanceExpanded[index]);
+        },
+
+        // 简单的 Markdown 渲染（支持基本格式）
+        renderMarkdown(text) {
+            if (!text) return '';
+            
+            // 转义 HTML
+            let html = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            // 转换 Markdown 语法
+            html = html
+                // 标题
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                // 粗体
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/__(.*?)__/g, '<strong>$1</strong>')
+                // 斜体
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/_(.*?)_/g, '<em>$1</em>')
+                // 行内代码
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // 链接
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+                // 换行
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            
+            return '<p>' + html + '</p>';
         }
     }
 });

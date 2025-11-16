@@ -1,5 +1,6 @@
 # 二进制文件
 kuma-lite
+backend/main
 *.exe
 
 # 数据库文件
@@ -19,6 +20,7 @@ data/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 

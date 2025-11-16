@@ -28,6 +28,10 @@ type Config struct {
 
 	// 数据保留策略
 	DataRetentionDays int
+
+	// 日志配置
+	LogLevel       string // 日志级别: DEBUG, INFO, WARN, ERROR, FATAL
+	LogEnableColor bool   // 是否启用彩色输出
 }
 
 var AppConfig *Config
@@ -39,10 +43,12 @@ func LoadConfig() *Config {
 		KumaStatusSlug:         getEnv("KUMA_STATUS_PAGE_SLUG", ""),
 		ServerPort:             getEnv("SERVER_PORT", "8080"),
 		CacheDuration:          time.Duration(getEnvInt("CACHE_DURATION", 60)) * time.Second,
-		FetchInterval:          time.Duration(getEnvInt("FETCH_INTERVAL", 60)) * time.Second,
-		ConcurrentQueryWorkers: getEnvInt("CONCURRENT_QUERY_WORKERS", 10), // 默认10个并发线程
+		FetchInterval:          time.Duration(getEnvInt("FETCH_INTERVAL", 300)) * time.Second, // 默认5分钟
+		ConcurrentQueryWorkers: getEnvInt("CONCURRENT_QUERY_WORKERS", 10),                     // 默认10个并发线程
 		DBPath:                 getEnv("DB_PATH", "./data/kuma-lite.db"),
-		DataRetentionDays:      getEnvInt("DATA_RETENTION_DAYS", 30),
+		DataRetentionDays:      getEnvInt("DATA_RETENTION_DAYS", 90),
+		LogLevel:               getEnv("LOG_LEVEL", "INFO"),          // 默认INFO级别
+		LogEnableColor:         getEnvBool("LOG_ENABLE_COLOR", true), // 默认启用彩色
 	}
 
 	// 验证必需配置
@@ -81,4 +87,20 @@ func getEnvInt(key string, defaultValue int) int {
 	}
 
 	return intValue
+}
+
+// getEnvBool 获取布尔类型环境变量
+func getEnvBool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+
+	boolValue, err := strconv.ParseBool(value)
+	if err != nil {
+		log.Printf("警告: %s 不是有效的布尔值,使用默认值 %v", key, defaultValue)
+		return defaultValue
+	}
+
+	return boolValue
 }
