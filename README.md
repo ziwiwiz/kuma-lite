@@ -123,97 +123,105 @@ kuma-lite/
 └── README.md                     # 项目说明
 ```
 
-## 快速开始
+## 🚀 快速开始
 
-### 🐳 使用 Docker Hub 镜像（最简单）
+### 方式一：Docker Compose（推荐）
 
 ```bash
-# 1. 创建配置文件
-cat > .env << EOF
+# 1. 克隆项目
+git clone https://github.com/ziwiwiz/kuma-lite.git
+cd kuma-lite
+
+# 2. 复制并编辑配置文件
+cp .env.example .env
+nano .env  # 或使用其他编辑器
+
+# 3. 启动服务
+docker-compose up -d
+
+# 4. 查看日志
+docker-compose logs -f
+```
+
+访问 `http://localhost:8080` 查看监控仪表盘。
+
+**最少配置项**：
+```env
 KUMA_API_URL=https://your-kuma-instance.com
 KUMA_STATUS_PAGE_SLUG=your-status-page-slug
-SERVER_PORT=8080
-EOF
+```
+
+### 方式二：Docker 命令
+
+```bash
+# 1. 创建数据目录
+mkdir -p data
 
 # 2. 运行容器
 docker run -d \
   --name kuma-lite \
   -p 8080:8080 \
-  --env-file .env \
   -v $(pwd)/data:/data \
+  -e KUMA_API_URL=https://your-kuma-instance.com \
+  -e KUMA_STATUS_PAGE_SLUG=your-status-page-slug \
   ziwiwiz/kuma-lite:latest
 
 # 3. 查看日志
 docker logs -f kuma-lite
 ```
 
-访问 `http://localhost:8080` 即可查看监控仪表盘。
-
-**Docker 镜像标签**:
+**Docker 镜像标签**：
 - `ziwiwiz/kuma-lite:latest` - 最新版本
-- `ziwiwiz/kuma-lite:1.0.0` - 稳定版本
+- `ziwiwiz/kuma-lite:v1.x.x` - 指定版本
 
-### 使用 Docker Compose 部署
-
-```bash
-# 克隆项目
-git clone https://github.com/ziwiwiz/kuma-lite.git
-cd kuma-lite
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件，配置 Uptime Kuma API 地址
-
-# 启动容器
-docker-compose up -d
-```
-
-访问 `http://localhost:8080` 即可查看监控仪表盘。
-
-### 本地开发
+### 方式三：本地开发
 
 ```bash
-# 安装 Go 依赖
+# 1. 安装依赖
 go mod download
 
-# 配置环境变量
-export KUMA_API_URL=https://your-kuma-instance.com
-export KUMA_STATUS_PAGE_SLUG=your-status-page-slug
+# 2. 配置环境变量
+cp .env.example .env
+nano .env
 
-# 运行服务
+# 3. 运行服务
 go run backend/main.go
-```
 
-访问 `http://localhost:8080` 查看应用。
+# 或使用 air 热重载
+air
+```
 
 ## ⚙️ 配置说明
 
-### 环境变量
+所有配置通过 `.env` 文件或环境变量设置：
 
-```env
-# ===== Uptime Kuma 配置 =====
-KUMA_API_URL=https://your-kuma-instance.com
-KUMA_STATUS_PAGE_SLUG=your-status-page-slug
+### 必需配置
 
-# ===== 服务器配置 =====
-SERVER_PORT=8080
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `KUMA_API_URL` | Uptime Kuma 实例地址 | `https://status.example.com` |
+| `KUMA_STATUS_PAGE_SLUG` | 状态页面 slug | `my-status-page` |
 
-# ===== 缓存配置 =====
-CACHE_DURATION=60          # 缓存时间（秒）
-FETCH_INTERVAL=30          # 数据获取间隔（秒）
+### 可选配置
 
-# ===== 数据库配置 =====
-DB_PATH=/data/kuma-lite.db
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `SERVER_PORT` | `8080` | 服务监听端口 |
+| `CACHE_DURATION` | `60` | 缓存持续时间（秒） |
+| `FETCH_INTERVAL` | `60` | 数据获取间隔（秒） |
+| `CONCURRENT_QUERY_WORKERS` | `10` | 并发查询线程数 |
+| `DATA_RETENTION_DAYS` | `90` | 数据保留天数（0=永久） |
+| `LOG_LEVEL` | `INFO` | 日志级别（推荐 `WARN`） |
+| `LOG_ENABLE_COLOR` | `true` | 彩色日志输出 |
 
-# ===== 数据保留策略 =====
-DATA_RETENTION_DAYS=30     # 历史数据保留天数（0=不限制）
+完整配置示例请查看 [.env.example](./.env.example)
 
-# ===== 日志配置 =====
-LOG_LEVEL=WARN             # 日志级别: DEBUG, INFO, WARN, ERROR, FATAL
-LOG_ENABLE_COLOR=true      # 启用彩色日志输出
-```
+**配置技巧**：
+- 生产环境建议使用 `LOG_LEVEL=WARN` 减少日志输出
+- `FETCH_INTERVAL` 建议与 `CACHE_DURATION` 保持一致
+- `DATA_RETENTION_DAYS=0` 可永久保留数据，但会增加数据库大小
 
-详细配置说明请参考 [部署文档](./docs/DEPLOYMENT.md)
+详细配置说明请参考 [部署文档](./docs/DEPLOYMENT.md) 和 [日志配置](./docs/LOG_LEVELS.md)
 
 ## 工作原理
 
