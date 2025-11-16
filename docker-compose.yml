@@ -1,6 +1,6 @@
 services:
   kuma-lite:
-    image: kuma-lite:latest
+    image: ziwiwiz/kuma-lite:latest
     container_name: kuma-lite
     ports:
       - "${SERVER_PORT:-8080}:8080"
