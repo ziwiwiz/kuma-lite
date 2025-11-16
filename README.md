@@ -127,19 +127,24 @@ kuma-lite/
 
 ### 方式一：Docker Compose（推荐）
 
+适合需要持久化配置和数据的场景。
+
 ```bash
-# 1. 克隆项目
-git clone https://github.com/ziwiwiz/kuma-lite.git
-cd kuma-lite
+# 1. 创建项目目录
+mkdir kuma-lite && cd kuma-lite
 
-# 2. 复制并编辑配置文件
-cp .env.example .env
-nano .env  # 或使用其他编辑器
+# 2. 下载配置文件
+curl -O https://raw.githubusercontent.com/ziwiwiz/kuma-lite/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/ziwiwiz/kuma-lite/main/.env.example
+mv .env.example .env
 
-# 3. 启动服务
+# 3. 编辑配置文件
+nano .env  # 修改 KUMA_API_URL 和 KUMA_STATUS_PAGE_SLUG
+
+# 4. 启动服务
 docker-compose up -d
 
-# 4. 查看日志
+# 5. 查看日志
 docker-compose logs -f
 ```
 
@@ -151,45 +156,54 @@ KUMA_API_URL=https://your-kuma-instance.com
 KUMA_STATUS_PAGE_SLUG=your-status-page-slug
 ```
 
-### 方式二：Docker 命令
+### 方式二：Docker 命令（快速体验）
+
+适合快速测试和临时使用。
 
 ```bash
-# 1. 创建数据目录
-mkdir -p data
-
-# 2. 运行容器
 docker run -d \
   --name kuma-lite \
   -p 8080:8080 \
   -v $(pwd)/data:/data \
   -e KUMA_API_URL=https://your-kuma-instance.com \
   -e KUMA_STATUS_PAGE_SLUG=your-status-page-slug \
+  -e LOG_LEVEL=WARN \
+  --restart unless-stopped \
   ziwiwiz/kuma-lite:latest
-
-# 3. 查看日志
-docker logs -f kuma-lite
 ```
 
-**Docker 镜像标签**：
-- `ziwiwiz/kuma-lite:latest` - 最新版本
-- `ziwiwiz/kuma-lite:v1.x.x` - 指定版本
+查看日志：`docker logs -f kuma-lite`
+
+**镜像地址**：[ziwiwiz/kuma-lite](https://hub.docker.com/r/ziwiwiz/kuma-lite)
+
+**可用标签**：
+- `latest` - 最新开发版
+- `v1.x.x` - 稳定发行版
 
 ### 方式三：本地开发
 
+适合开发调试和功能定制。
+
 ```bash
-# 1. 安装依赖
+# 1. 克隆仓库
+git clone https://github.com/ziwiwiz/kuma-lite.git
+cd kuma-lite
+
+# 2. 安装依赖
 go mod download
 
-# 2. 配置环境变量
+# 3. 配置环境变量
 cp .env.example .env
 nano .env
 
-# 3. 运行服务
+# 4. 运行服务
 go run backend/main.go
 
-# 或使用 air 热重载
+# 或使用 air 热重载（推荐）
 air
 ```
+
+访问 `http://localhost:8080` 查看应用。
 
 ## ⚙️ 配置说明
 
