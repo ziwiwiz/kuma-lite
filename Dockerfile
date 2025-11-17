@@ -29,7 +29,7 @@ COPY --from=builder /app/kuma-lite /app/kuma-lite
 COPY static /app/static
 
 # 创建数据目录
-COPY --from=builder /dev/null /data/placeholder  # 让 /data 存在
+RUN mkdir -p /data
 VOLUME ["/data"]
 
 ENV DB_PATH=/data/kuma-lite.db
