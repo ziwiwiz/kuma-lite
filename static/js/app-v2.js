@@ -1413,6 +1413,9 @@ const app = createApp({
                         logger.info(`⏱️ [主页倒计时] 还有 ${this.countdown} 秒将触发后端采集`);
                     }
                 } else if (!this.paused && this.countdown === 0) {
+                    this.countdown = this.autoRefreshSeconds;
+                    logger.info(`♻️ [主页] 倒计时已重置为 ${this.autoRefreshSeconds} 秒`);
+
                     // 倒计时归零时触发后端采集
                     logger.info('⏰ [主页] 1分钟倒计时结束,触发后端立即采集Kuma数据...');
                     try {
@@ -1432,8 +1435,6 @@ const app = createApp({
                         // 失败时也尝试刷新前端数据
                         await this.fetchData(false);
                     }
-                    this.countdown = this.autoRefreshSeconds;
-                    logger.info(`♻️ [主页] 倒计时已重置为 ${this.autoRefreshSeconds} 秒`);
                 }
             }, 1000);
         },
