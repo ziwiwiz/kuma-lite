@@ -490,7 +490,7 @@ const app = createApp({
                 this.loading = false;
                 this.countdown = 60;
 
-                // 更新图表（直接重新渲染确保所有配置正确应用）
+                // 使用 $nextTick 确保 DOM 更新完成后再渲染图表
                 this.$nextTick(() => {
                     this.renderChart();
                 });

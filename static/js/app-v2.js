@@ -1173,22 +1173,25 @@ const app = createApp({
                 return;
             }
             
-            this.monitors.forEach(monitor => {
-                const chartEl = document.getElementById('chart-' + monitor.id);
-                if (chartEl) {
-                    this.renderChart(monitor);
-                }
-            });
-            
-            // 如果有容器未找到，500ms 后重试一次
-            setTimeout(() => {
+            // 使用 $nextTick 确保 DOM 更新完成后再渲染
+            this.$nextTick(() => {
                 this.monitors.forEach(monitor => {
                     const chartEl = document.getElementById('chart-' + monitor.id);
-                    if (chartEl && !this.charts[monitor.id]) {
+                    if (chartEl) {
                         this.renderChart(monitor);
                     }
                 });
-            }, 500);
+                
+                // 极少数情况下 DOM 可能还未完全就绪，添加一个快速的安全检查（仅100ms）
+                setTimeout(() => {
+                    this.monitors.forEach(monitor => {
+                        const chartEl = document.getElementById('chart-' + monitor.id);
+                        if (chartEl && !this.charts[monitor.id]) {
+                            this.renderChart(monitor);
+                        }
+                    });
+                }, 100);
+            });
         },
 
         // 渲染单个图表
