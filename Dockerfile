@@ -1,15 +1,15 @@
-# 构建阶段
-FROM golang:1.21-alpine AS builder
+# 构建阶段 - 使用Debian替代Alpine解决sqlite CGO编译问题
+FROM golang:1.21-bullseye AS builder
 
 # 设置工作目录
 WORKDIR /app
 
-# 安装构建依赖 (CGO编译sqlite必需)
-RUN apk add --no-cache \
+# 安装构建依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    musl-dev \
-    sqlite-dev \
-    git
+    libc6-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # 设置构建参数
 ARG VERSION=dev
@@ -25,28 +25,30 @@ RUN go mod download && go mod verify
 # 复制源代码
 COPY backend ./backend
 
-# 构建应用 (动态链接sqlite,避免静态链接问题)
+# 构建应用 (启用CGO编译sqlite)
 RUN CGO_ENABLED=1 GOOS=linux go build \
     -ldflags "-w -s -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILDTIME}" \
+    -a -installsuffix cgo \
     -o kuma-lite backend/main.go
 
-# 运行阶段 - 使用更小的Alpine基础镜像
-FROM alpine:3.18
+# 运行阶段 - 使用Debian Slim最小化镜像
+FROM debian:bullseye-slim
 
 WORKDIR /app
 
-# 安装运行时依赖 (sqlite-libs是运行必需的)
-RUN apk add --no-cache \
+# 安装运行时依赖 (仅必需的库)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    sqlite-libs \
+    libsqlite3-0 \
+    wget \
     tzdata \
-    wget && \
+    && rm -rf /var/lib/apt/lists/* \
     # 创建非root用户和组
-    addgroup -g 1000 kuma && \
-    adduser -D -u 1000 -G kuma kuma && \
+    && groupadd -g 1000 kuma \
+    && useradd -r -u 1000 -g kuma kuma \
     # 创建数据目录并设置权限
-    mkdir -p /data && \
-    chown -R kuma:kuma /app /data
+    && mkdir -p /data \
+    && chown -R kuma:kuma /app /data
 
 # 从构建阶段复制二进制文件
 COPY --from=builder --chown=kuma:kuma /app/kuma-lite .
