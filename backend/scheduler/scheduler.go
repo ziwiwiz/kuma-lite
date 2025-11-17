@@ -124,6 +124,7 @@ func fetchAndStore(source string) {
 	updatedMonitors := make(map[string]bool)
 	newHeartbeatCount := 0
 	totalHeartbeats := 0
+	startTime := time.Now()
 
 	for _, monitor := range monitors {
 		if err := database.SaveMonitor(&monitor); err != nil {
@@ -131,36 +132,34 @@ func fetchAndStore(source string) {
 			continue
 		}
 
-		// 解析并保存心跳历史记录
+		// 批量保存心跳历史记录
 		if heartbeatData != nil {
 			heartbeats := fetcher.ParseHeartBeats(monitor.ID, heartbeatData)
 			totalHeartbeats += len(heartbeats)
 
-			newRecordsInMonitor := 0
-			for _, hb := range heartbeats {
-				isNew, err := database.SaveHeartBeat(&hb)
+			if len(heartbeats) > 0 {
+				// 使用批量保存
+				newCount, err := database.BatchSaveHeartBeats(heartbeats)
 				if err != nil {
-					logger.Error("❌ [%s] ✗ 保存心跳记录失败 [监控项 %d]: %v", source, monitor.ID, err)
+					logger.Error("❌ [%s] ✗ 批量保存心跳记录失败 [监控项 %d]: %v", source, monitor.ID, err)
 					continue
 				}
-				if isNew {
-					newRecordsInMonitor++
+
+				if newCount > 0 {
 					// 有新的心跳记录，标记该监控项需要更新缓存
 					monitorIDStr := strconv.Itoa(monitor.ID)
 					if !updatedMonitors[monitorIDStr] {
 						updatedMonitors[monitorIDStr] = true
 						newHeartbeatCount++
 					}
+					logger.Info("  📝 [%s]   监控项 [%s] (ID:%d): 新增 %d 条记录", source, monitor.Name, monitor.ID, newCount)
 				}
-			}
-
-			if newRecordsInMonitor > 0 {
-				logger.Info("  📝 [%s]   监控项 [%s] (ID:%d): 新增 %d 条记录", source, monitor.Name, monitor.ID, newRecordsInMonitor)
 			}
 		}
 	}
 
-	logger.Info("✅ [%s] ✓ 数据库更新完成: 处理 %d 条心跳记录, 其中 %d 个监控项有新数据", source, totalHeartbeats, newHeartbeatCount)
+	elapsed := time.Since(startTime)
+	logger.Info("✅ [%s] ✓ 数据库更新完成: 处理 %d 条心跳记录, 其中 %d 个监控项有新数据 (耗时: %v)", source, totalHeartbeats, newHeartbeatCount, elapsed)
 
 	logger.Info("───────────────────────────────────────────────────────")
 	logger.Info("🔍 [%s] ▶ 阶段3: 比较新记录与缓存", source)

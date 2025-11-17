@@ -83,6 +83,55 @@ func SaveHeartBeat(heartbeat *models.HeartBeat) (bool, error) {
 	return true, nil
 }
 
+// BatchSaveHeartBeats 批量保存心跳记录，返回新增的记录数
+func BatchSaveHeartBeats(heartbeats []models.HeartBeat) (int, error) {
+	if len(heartbeats) == 0 {
+		return 0, nil
+	}
+
+	// 获取该监控项的最新心跳时间，用于过滤
+	monitorID := heartbeats[0].MonitorID
+	var lastHeartbeat models.HeartBeat
+	err := DB.Where("monitor_id = ?", monitorID).
+		Order("created_at DESC").
+		First(&lastHeartbeat).Error
+
+	var lastTime time.Time
+	if err == nil {
+		lastTime = lastHeartbeat.CreatedAt
+	}
+
+	// 过滤出新记录
+	var newHeartbeats []models.HeartBeat
+	for _, hb := range heartbeats {
+		if hb.CreatedAt.After(lastTime) {
+			newHeartbeats = append(newHeartbeats, hb)
+		}
+	}
+
+	if len(newHeartbeats) == 0 {
+		return 0, nil
+	}
+
+	// 批量插入，每次500条
+	batchSize := 500
+	newCount := 0
+	for i := 0; i < len(newHeartbeats); i += batchSize {
+		end := i + batchSize
+		if end > len(newHeartbeats) {
+			end = len(newHeartbeats)
+		}
+		
+		batch := newHeartbeats[i:end]
+		if err := DB.CreateInBatches(batch, batchSize).Error; err != nil {
+			return newCount, err
+		}
+		newCount += len(batch)
+	}
+
+	return newCount, nil
+}
+
 // GetRecentHeartBeats 获取监控项最近N条心跳记录(不限制时间范围)
 func GetRecentHeartBeats(monitorID int, limit int) ([]models.HeartBeat, error) {
 	var heartbeats []models.HeartBeat
