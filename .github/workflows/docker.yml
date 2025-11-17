@@ -4,6 +4,8 @@ permissions:
   contents: write
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 jobs:
@@ -44,8 +46,8 @@ jobs:
             COMMIT=${{ env.COMMIT }}
             BUILDTIME=${{ env.BUILDTIME }}
           tags: |
-            ziwiwiz/kuma-lite:test
-            ziwiwiz/kuma-lite:${{ env.VERSION }}-test
+            ziwiwiz/kuma-lite:latest
+            ziwiwiz/kuma-lite:${{ env.VERSION }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
