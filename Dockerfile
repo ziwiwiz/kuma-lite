@@ -43,21 +43,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     tzdata \
     && rm -rf /var/lib/apt/lists/* \
-    # 创建非root用户和组
-    && groupadd -g 1000 kuma \
-    && useradd -r -u 1000 -g kuma kuma \
-    # 创建数据目录并设置权限
-    && mkdir -p /data \
-    && chown -R kuma:kuma /app /data
+    # 创建数据目录
+    && mkdir -p /data
 
 # 从构建阶段复制二进制文件
-COPY --from=builder --chown=kuma:kuma /app/kuma-lite .
+COPY --from=builder /app/kuma-lite .
 
 # 复制静态文件
-COPY --chown=kuma:kuma static ./static
-
-# 切换到非root用户
-USER kuma
+COPY static ./static
 
 # 暴露端口
 EXPOSE 8080
