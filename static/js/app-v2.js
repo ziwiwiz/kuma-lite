@@ -551,14 +551,7 @@ const app = createApp({
                         logger.info(`✅ [主页-手动刷新] 已通知后端采集数据 (耗时: ${Date.now() - startTime}ms)`);
                         // 等待1秒让后端完成采集
                         await new Promise(resolve => setTimeout(resolve, 1000));
-                        // 手动刷新时清空所有静态数据缓存
-                        sessionStorage.removeItem('static_config');
-                        sessionStorage.removeItem('static_stats');
-                        sessionStorage.removeItem('static_maintenances');
-                        sessionStorage.removeItem('static_incidents');
-                        sessionStorage.removeItem('static_logConfig');
-                        localStorage.removeItem('monitors_list');
-                        logger.info('🗑️ [主页-手动刷新] 已清空所有静态数据缓存');
+                        logger.info('🔄 [主页-手动刷新] 将比较数据变化后更新缓存');
                     } catch (err) {
                         logger.error('❌ [主页-手动刷新] 触发后端采集失败:', err);
                     }
@@ -627,9 +620,8 @@ const app = createApp({
                     const statsRes = await axios.get('/api/stats');
                     if (statsRes.data.success) {
                         this.stats = statsRes.data.data;
-                        if (!forceRefresh) {
-                            this.setStaticDataCache('stats', this.stats);
-                        }
+                        // 手动刷新也使用缓存，比较变化后更新
+                        this.setStaticDataCache('stats', this.stats);
                     }
                 }
 
@@ -691,9 +683,8 @@ const app = createApp({
                         if (maintenancesRes.data.success) {
                             this.currentMaintenances = maintenancesRes.data.maintenances || [];
                             this.maintenanceExpanded = this.currentMaintenances.map(() => false);
-                            if (!forceRefresh) {
-                                this.setStaticDataCache('maintenances', this.currentMaintenances);
-                            }
+                            // 手动刷新也使用缓存，比较变化后更新
+                            this.setStaticDataCache('maintenances', this.currentMaintenances);
                         }
                     } catch (err) {
                         logger.warn('获取维护公告失败:', err);
@@ -721,9 +712,8 @@ const app = createApp({
                         const incidentRes = await axios.get('/api/incidents/active');
                         if (incidentRes.data.success) {
                             this.activeIncident = incidentRes.data.incident;
-                            if (!forceRefresh) {
-                                this.setStaticDataCache('incidents', this.activeIncident);
-                            }
+                            // 手动刷新也使用缓存，比较变化后更新
+                            this.setStaticDataCache('incidents', this.activeIncident);
                         }
                     } catch (err) {
                         logger.warn('获取事件失败:', err);
