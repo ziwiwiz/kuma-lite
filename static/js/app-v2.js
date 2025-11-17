@@ -543,7 +543,7 @@ const app = createApp({
             try {
                 // 手动刷新时，先触发后端立即采集Kuma数据
                 if (forceRefresh) {
-                    this.loading = true;  // 手动刷新时显示loading状态
+                    // 手动刷新不显示loading，在后台更新（和倒计时自动刷新逻辑一致）
                     logger.info('🔴 [主页-手动刷新] 用户点击刷新按钮,触发后端立即采集Kuma数据');
                     try {
                         const startTime = Date.now();
