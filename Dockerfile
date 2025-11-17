@@ -1,28 +1,50 @@
-# 构建阶段
+# 构建阶段 - 使用Debian替代Alpine解决sqlite CGO编译问题
 FROM golang:1.21-bullseye AS builder
 
+# 设置工作目录
 WORKDIR /app
 
 # 安装构建依赖
-RUN apt-get update && apt-get install -y gcc libc6-dev libsqlite3-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# 复制 go.mod 和 go.sum
+# 设置构建参数
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILDTIME=unknown
+
+# 复制 go.mod 和 go.sum (利用缓存层)
 COPY go.mod go.sum ./
-RUN go mod download
+
+# 下载依赖
+RUN go mod download && go mod verify
 
 # 复制源代码
 COPY backend ./backend
 
-# 构建应用
-RUN CGO_ENABLED=1 go build -o kuma-lite backend/main.go
+# 构建应用 (启用CGO编译sqlite)
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags "-w -s -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILDTIME}" \
+    -a -installsuffix cgo \
+    -o kuma-lite backend/main.go
 
-# 运行阶段
+# 运行阶段 - 使用Debian Slim最小化镜像
 FROM debian:bullseye-slim
 
 WORKDIR /app
 
-# 安装运行时依赖
-RUN apt-get update && apt-get install -y ca-certificates sqlite3 && rm -rf /var/lib/apt/lists/*
+# 安装运行时依赖 (仅必需的库)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libsqlite3-0 \
+    wget \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    # 创建数据目录
+    && mkdir -p /data
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/kuma-lite .
@@ -30,14 +52,15 @@ COPY --from=builder /app/kuma-lite .
 # 复制静态文件
 COPY static ./static
 
-# 创建数据目录
-RUN mkdir -p /data
-
 # 暴露端口
 EXPOSE 8080
 
 # 设置环境变量
 ENV DB_PATH=/data/kuma-lite.db
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
 # 启动应用
 CMD ["./kuma-lite"]

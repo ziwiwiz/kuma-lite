@@ -144,6 +144,7 @@ const app = createApp({
             stats: null,
             loading: true,
             isInitialLoad: true, // 标记首次加载
+            isLoadingFromCache: false, // 标记是否从缓存加载
             error: null,
             lastUpdate: '',
             countdown: 60,
@@ -162,6 +163,7 @@ const app = createApp({
             countdownInterval: null,
             autoRefreshSeconds: 60, // 前端1分钟倒计时触发后端采集
             historyCacheTTL: 300000, // 前端缓存5分钟(300秒)，避免频繁请求
+            staticDataCacheTTL: 300000, // 静态数据缓存5分钟（config、stats等）
             tooltip: {
                 show: false,
                 text: '',
@@ -173,9 +175,11 @@ const app = createApp({
             currentMaintenances: [],
             activeIncident: null,
             config: null,
+            logConfig: null, // 日志配置
             // 折叠状态
             incidentExpanded: false, // 事件通知默认折叠
-            maintenanceExpanded: [] // 维护通知展开状态数组
+            maintenanceExpanded: [], // 维护通知展开状态数组
+            isReturningFromDetail: false // 标记是否从详情页返回
         };
     },
     computed: {
@@ -302,6 +306,7 @@ const app = createApp({
             const elapsed = Math.floor((Date.now() - parseInt(savedTimestamp)) / 1000);
             const restoredCountdown = Math.max(0, parseInt(savedCountdown) - elapsed);
             this.countdown = restoredCountdown > 0 ? restoredCountdown : this.autoRefreshSeconds;
+            this.isReturningFromDetail = true; // 标记为从详情页返回
             logger.info(`📍 [详情页→主页] 从详情页返回主页`);
             logger.info(`🔄 [详情页→主页] 恢复倒计时: ${savedCountdown}秒 → ${this.countdown}秒 (在详情页期间经过了${elapsed}秒)`);
             
@@ -326,6 +331,11 @@ const app = createApp({
         }
         
         logger.info('🚀 [主页] 开始初始化数据加载...');
+        
+        // 🎯 优化: 先尝试从缓存快速渲染
+        this.loadFromCacheFirst();
+        
+        // 然后异步获取最新数据
         this.fetchData();
         this.startAutoRefresh();
     },
@@ -396,13 +406,138 @@ const app = createApp({
             });
         },
         
+        // 🎯 新增: 优先从缓存加载数据快速渲染页面
+        async loadFromCacheFirst() {
+            logger.info('⚡ [快速渲染] 尝试从缓存加载数据...');
+            
+            // 获取缓存的监控列表和历史数据
+            const cachedMonitors = this.getCachedMonitors();
+            
+            if (cachedMonitors && cachedMonitors.length > 0) {
+                this.isLoadingFromCache = true;
+                logger.info(`📦 [快速渲染] 找到 ${cachedMonitors.length} 个监控项的缓存数据`);
+                
+                // 使用缓存数据快速渲染
+                this.monitors = cachedMonitors;
+                
+                // 加载每个监控项的历史数据（从 localStorage）
+                let cachedCount = 0;
+                this.monitors.forEach(monitor => {
+                    const cached = this.getHistoryCache(monitor.id);
+                    if (cached && cached.data.length > 0) {
+                        this.applyHistoryData(monitor, cached.data);
+                        cachedCount++;
+                    }
+                });
+                
+                logger.info(`📦 [快速渲染] 成功应用 ${cachedCount}/${cachedMonitors.length} 个监控项的历史数据缓存`);
+                
+                // 尝试从缓存加载其他数据
+                const cachedStats = this.getStaticDataCache('stats');
+                if (cachedStats) {
+                    this.stats = cachedStats;
+                    logger.info('📦 [快速渲染] 已加载统计信息缓存');
+                }
+                
+                const cachedConfig = this.getStaticDataCache('config');
+                if (cachedConfig) {
+                    this.config = cachedConfig;
+                    logger.info('📦 [快速渲染] 已加载配置缓存');
+                }
+                
+                const cachedMaintenances = this.getStaticDataCache('maintenances');
+                if (cachedMaintenances) {
+                    this.currentMaintenances = cachedMaintenances;
+                    this.maintenanceExpanded = this.currentMaintenances.map(() => false);
+                    logger.info('📦 [快速渲染] 已加载维护公告缓存');
+                }
+                
+                const cachedIncidents = this.getStaticDataCache('incidents');
+                if (cachedIncidents !== null) {
+                    this.activeIncident = cachedIncidents;
+                    logger.info('📦 [快速渲染] 已加载事件缓存');
+                }
+                
+                const cachedLogConfig = this.getStaticDataCache('logConfig');
+                if (cachedLogConfig) {
+                    this.logConfig = cachedLogConfig;
+                    logger.info('📦 [快速渲染] 已加载日志配置缓存');
+                }
+                
+                // 设置最后更新时间
+                const locale = this.language === 'zh' ? 'zh-CN' : 'en-US';
+                this.lastUpdate = new Date().toLocaleString(locale, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }) + ' (缓存)';
+                
+                // 关闭 loading 状态，立即渲染页面
+                this.loading = false;
+                
+                // 启用图表懒加载观察器
+                if (!this.compactMode && this.chartObserver) {
+                    this.$nextTick(() => {
+                        this.observeMonitorCards();
+                        logger.info('📊 [快速渲染] 已启用图表懒加载观察器');
+                    });
+                }
+                
+                logger.info('✅ [快速渲染] 页面已使用缓存数据渲染完成，后台将获取最新数据');
+            } else {
+                logger.info('ℹ️  [快速渲染] 未找到缓存数据，等待 API 加载');
+            }
+        },
+        
+        // 🎯 新增: 获取缓存的监控列表
+        getCachedMonitors() {
+            try {
+                const cached = localStorage.getItem('monitors_list');
+                if (!cached) return null;
+                
+                const { data, timestamp } = JSON.parse(cached);
+                const now = Date.now();
+                
+                // 检查缓存是否过期（5分钟）
+                if (now - timestamp > this.historyCacheTTL) {
+                    localStorage.removeItem('monitors_list');
+                    logger.info('🧹 清理过期的监控列表缓存');
+                    return null;
+                }
+                
+                logger.info(`📦 使用监控列表缓存 (剩余 ${Math.floor((this.historyCacheTTL - (now - timestamp)) / 1000)}秒)`);
+                return data;
+            } catch (err) {
+                logger.error('Failed to get monitors cache:', err);
+                return null;
+            }
+        },
+        
+        // 🎯 新增: 缓存监控列表
+        setCachedMonitors(monitors) {
+            try {
+                const cacheData = {
+                    data: monitors,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('monitors_list', JSON.stringify(cacheData));
+                logger.info(`💾 已缓存监控列表 (${monitors.length} 项)`);
+            } catch (err) {
+                logger.error('Failed to cache monitors:', err);
+            }
+        },
+
         // 获取数据
         // forceRefresh: true = 手动刷新，强制获取新数据并更新缓存
         // forceRefresh: false = 自动刷新，比较数据差异后更新缓存
         async fetchData(forceRefresh = false) {
             if (this.paused && !forceRefresh) return;
             
-            const refreshType = forceRefresh ? '手动刷新' : '自动刷新';
+            const refreshType = forceRefresh ? '手动刷新' : (this.isReturningFromDetail ? '从详情页返回' : (this.isLoadingFromCache ? '后台更新' : '自动刷新'));
             logger.info(`📊 [主页-${refreshType}] 开始获取数据...`);
             
             try {
@@ -416,12 +551,22 @@ const app = createApp({
                         logger.info(`✅ [主页-手动刷新] 已通知后端采集数据 (耗时: ${Date.now() - startTime}ms)`);
                         // 等待1秒让后端完成采集
                         await new Promise(resolve => setTimeout(resolve, 1000));
+                        // 手动刷新时清空所有静态数据缓存
+                        sessionStorage.removeItem('static_config');
+                        sessionStorage.removeItem('static_stats');
+                        sessionStorage.removeItem('static_maintenances');
+                        sessionStorage.removeItem('static_incidents');
+                        sessionStorage.removeItem('static_logConfig');
+                        localStorage.removeItem('monitors_list');
+                        logger.info('🗑️ [主页-手动刷新] 已清空所有静态数据缓存');
                     } catch (err) {
                         logger.error('❌ [主页-手动刷新] 触发后端采集失败:', err);
                     }
                 } else if (this.isInitialLoad && this.triggerSource === 'initial') {
-                    // 首次加载时触发采集
-                    this.loading = true;
+                    // 首次加载时触发采集（仅在没有缓存的情况下显示loading）
+                    if (!this.isLoadingFromCache) {
+                        this.loading = true;
+                    }
                     logger.info('🟢 [主页-首次加载] 触发后端立即采集Kuma数据');
                     try {
                         const startTime = Date.now();
@@ -436,59 +581,153 @@ const app = createApp({
                     }
                 }
                 
-                // 首次加载时显示 loading 状态
-                if (this.isInitialLoad) {
+                // 首次加载且无缓存时显示 loading 状态
+                if (this.isInitialLoad && !this.isReturningFromDetail && !this.isLoadingFromCache) {
                     this.loading = true;
                 }
                 this.error = null;
 
-                // 获取监控列表
+                // 获取监控列表（总是需要，因为状态可能变化）
                 const monitorsRes = await axios.get('/api/monitors');
                 if (monitorsRes.data.success) {
-                    this.monitors = monitorsRes.data.data;
+                    const newMonitors = monitorsRes.data.data;
+                    
+                    // 🎯 如果是从缓存加载后的后台更新，检查数据是否有变化
+                    if (this.isLoadingFromCache && this.monitors.length > 0) {
+                        const hasChanged = this.hasMonitorsChanged(this.monitors, newMonitors);
+                        if (hasChanged) {
+                            logger.info('🔄 [后台更新] 监控列表数据有变化，更新页面');
+                        } else {
+                            logger.info('ℹ️  [后台更新] 监控列表无变化');
+                        }
+                    }
+                    
+                    this.monitors = newMonitors;
+                    
+                    // 缓存监控列表
+                    this.setCachedMonitors(newMonitors);
                     
                     // 为每个监控项获取历史数据
                     await this.fetchAllHistory(forceRefresh);
                 }
 
-                // 获取统计信息
-                const statsRes = await axios.get('/api/stats');
-                if (statsRes.data.success) {
-                    this.stats = statsRes.data.data;
+                // 获取统计信息 - 优先使用缓存（从详情页返回时）
+                if (!forceRefresh && this.isReturningFromDetail) {
+                    const cachedStats = this.getStaticDataCache('stats');
+                    if (cachedStats) {
+                        this.stats = cachedStats;
+                    } else {
+                        const statsRes = await axios.get('/api/stats');
+                        if (statsRes.data.success) {
+                            this.stats = statsRes.data.data;
+                            this.setStaticDataCache('stats', this.stats);
+                        }
+                    }
+                } else {
+                    const statsRes = await axios.get('/api/stats');
+                    if (statsRes.data.success) {
+                        this.stats = statsRes.data.data;
+                        if (!forceRefresh) {
+                            this.setStaticDataCache('stats', this.stats);
+                        }
+                    }
                 }
 
-                // 获取配置（仅首次加载）
+                // 获取日志配置 - 优先使用缓存
+                if (!this.logConfig) {
+                    const cachedLogConfig = this.getStaticDataCache('logConfig');
+                    if (cachedLogConfig) {
+                        this.logConfig = cachedLogConfig;
+                    } else {
+                        try {
+                            const logConfigRes = await axios.get('/api/log-config');
+                            this.logConfig = logConfigRes.data;
+                            this.setStaticDataCache('logConfig', this.logConfig);
+                        } catch (err) {
+                            logger.warn('获取日志配置失败:', err);
+                        }
+                    }
+                }
+
+                // 获取配置 - 优先使用缓存
                 if (!this.config) {
+                    const cachedConfig = this.getStaticDataCache('config');
+                    if (cachedConfig) {
+                        this.config = cachedConfig;
+                    } else {
+                        try {
+                            const configRes = await axios.get('/api/config');
+                            if (configRes.data.success) {
+                                this.config = configRes.data.config;
+                                this.setStaticDataCache('config', this.config);
+                            }
+                        } catch (err) {
+                            logger.warn('获取配置失败:', err);
+                        }
+                    }
+                }
+
+                // 获取当前维护公告 - 优先使用缓存（从详情页返回时）
+                if (!forceRefresh && this.isReturningFromDetail) {
+                    const cachedMaintenances = this.getStaticDataCache('maintenances');
+                    if (cachedMaintenances) {
+                        this.currentMaintenances = cachedMaintenances;
+                        this.maintenanceExpanded = this.currentMaintenances.map(() => false);
+                    } else {
+                        try {
+                            const maintenancesRes = await axios.get('/api/maintenances/current');
+                            if (maintenancesRes.data.success) {
+                                this.currentMaintenances = maintenancesRes.data.maintenances || [];
+                                this.maintenanceExpanded = this.currentMaintenances.map(() => false);
+                                this.setStaticDataCache('maintenances', this.currentMaintenances);
+                            }
+                        } catch (err) {
+                            logger.warn('获取维护公告失败:', err);
+                        }
+                    }
+                } else {
                     try {
-                        const configRes = await axios.get('/api/config');
-                        if (configRes.data.success) {
-                            this.config = configRes.data.config;
+                        const maintenancesRes = await axios.get('/api/maintenances/current');
+                        if (maintenancesRes.data.success) {
+                            this.currentMaintenances = maintenancesRes.data.maintenances || [];
+                            this.maintenanceExpanded = this.currentMaintenances.map(() => false);
+                            if (!forceRefresh) {
+                                this.setStaticDataCache('maintenances', this.currentMaintenances);
+                            }
                         }
                     } catch (err) {
-                        logger.warn('获取配置失败:', err);
+                        logger.warn('获取维护公告失败:', err);
                     }
                 }
 
-                // 获取当前维护公告
-                try {
-                    const maintenancesRes = await axios.get('/api/maintenances/current');
-                    if (maintenancesRes.data.success) {
-                        this.currentMaintenances = maintenancesRes.data.maintenances || [];
-                        // 初始化维护通知展开状态数组（默认折叠）
-                        this.maintenanceExpanded = this.currentMaintenances.map(() => false);
+                // 获取活跃事件 - 优先使用缓存（从详情页返回时）
+                if (!forceRefresh && this.isReturningFromDetail) {
+                    const cachedIncidents = this.getStaticDataCache('incidents');
+                    if (cachedIncidents !== null) {
+                        this.activeIncident = cachedIncidents;
+                    } else {
+                        try {
+                            const incidentRes = await axios.get('/api/incidents/active');
+                            if (incidentRes.data.success) {
+                                this.activeIncident = incidentRes.data.incident;
+                                this.setStaticDataCache('incidents', this.activeIncident);
+                            }
+                        } catch (err) {
+                            logger.warn('获取事件失败:', err);
+                        }
                     }
-                } catch (err) {
-                    logger.warn('获取维护公告失败:', err);
-                }
-
-                // 获取活跃事件
-                try {
-                    const incidentRes = await axios.get('/api/incidents/active');
-                    if (incidentRes.data.success) {
-                        this.activeIncident = incidentRes.data.incident;
+                } else {
+                    try {
+                        const incidentRes = await axios.get('/api/incidents/active');
+                        if (incidentRes.data.success) {
+                            this.activeIncident = incidentRes.data.incident;
+                            if (!forceRefresh) {
+                                this.setStaticDataCache('incidents', this.activeIncident);
+                            }
+                        }
+                    } catch (err) {
+                        logger.warn('获取事件失败:', err);
                     }
-                } catch (err) {
-                    logger.warn('获取事件失败:', err);
                 }
 
                 // 使用 24 小时制格式
@@ -507,10 +746,30 @@ const app = createApp({
                     this.isInitialLoad = false;
                     
                     // 仅在首次加载时重置倒计时
-                    this.countdown = this.autoRefreshSeconds;
+                    if (!this.isLoadingFromCache) {
+                        this.countdown = this.autoRefreshSeconds;
+                    }
                 } else {
                     // 从详情页返回或自动刷新时,也要确保图表懒加载观察器已初始化
-                    logger.info('🔄 [主页] 非首次加载,检查图表懒加载观察器状态');
+                    if (this.isReturningFromDetail) {
+                        logger.info('🔄 [主页] 从详情页返回,检查图表懒加载观察器状态');
+                    } else if (this.isLoadingFromCache) {
+                        logger.info('🔄 [主页] 后台更新完成,检查图表懒加载观察器状态');
+                    } else {
+                        logger.info('🔄 [主页] 非首次加载,检查图表懒加载观察器状态');
+                    }
+                }
+                
+                // 清除返回标记
+                if (this.isReturningFromDetail) {
+                    this.isReturningFromDetail = false;
+                    logger.info('✅ [主页] 从详情页返回的数据加载完成（已使用缓存优化）');
+                }
+                
+                // 清除缓存加载标记
+                if (this.isLoadingFromCache) {
+                    this.isLoadingFromCache = false;
+                    logger.info('✅ [主页] 后台更新完成，数据已刷新');
                 }
                 
                 // 数据加载完成后,启用图表懒加载观察器（包括从详情页返回的情况）
@@ -532,8 +791,28 @@ const app = createApp({
                 this.error = '获取数据失败: ' + (err.message || '未知错误');
                 this.loading = false;
                 this.isInitialLoad = false;
+                this.isReturningFromDetail = false;
+                this.isLoadingFromCache = false;
                 logger.error('Fetch error:', err);
             }
+        },
+        
+        // 🎯 新增: 比较监控列表是否有变化
+        hasMonitorsChanged(oldMonitors, newMonitors) {
+            if (oldMonitors.length !== newMonitors.length) return true;
+            
+            // 比较每个监控项的关键字段
+            for (let i = 0; i < oldMonitors.length; i++) {
+                const oldM = oldMonitors[i];
+                const newM = newMonitors.find(m => m.id === oldM.id);
+                
+                if (!newM) return true;
+                if (oldM.status !== newM.status) return true;
+                if (oldM.name !== newM.name) return true;
+                if (oldM.enabled !== newM.enabled) return true;
+            }
+            
+            return false;
         },
 
         // localStorage 缓存辅助方法
@@ -1685,6 +1964,46 @@ const app = createApp({
                 .replace(/\n/g, '<br>');
             
             return '<p>' + html + '</p>';
+        },
+
+        // 从 sessionStorage 获取静态数据缓存
+        getStaticDataCache(key) {
+            try {
+                const cacheKey = `static_${key}`;
+                const cached = sessionStorage.getItem(cacheKey);
+                if (!cached) return null;
+                
+                const { data, timestamp } = JSON.parse(cached);
+                const now = Date.now();
+                
+                // 检查缓存是否过期（5分钟）
+                if (now - timestamp > this.staticDataCacheTTL) {
+                    sessionStorage.removeItem(cacheKey);
+                    logger.info(`🧹 清理过期静态缓存: ${key}`);
+                    return null;
+                }
+                
+                logger.info(`📦 使用静态数据缓存: ${key} (剩余 ${Math.floor((this.staticDataCacheTTL - (now - timestamp)) / 1000)}秒)`);
+                return data;
+            } catch (err) {
+                logger.error('Failed to get static cache:', err);
+                return null;
+            }
+        },
+        
+        // 设置 sessionStorage 静态数据缓存
+        setStaticDataCache(key, data) {
+            try {
+                const cacheKey = `static_${key}`;
+                const cacheData = {
+                    data: data,
+                    timestamp: Date.now()
+                };
+                sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                logger.info(`💾 已缓存静态数据: ${key}`);
+            } catch (err) {
+                logger.error('Failed to set static cache:', err);
+            }
         }
     }
 });
